@@ -73,6 +73,8 @@ export interface Diagnosis {
 /** Structural view of a stored session event; the real union is a superset. */
 export interface RawEvent {
   readonly type: string
+  /** Unix epoch milliseconds, when the log carries one. */
+  readonly time?: number
   readonly data?: Record<string, unknown>
 }
 

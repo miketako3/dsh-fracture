@@ -1,0 +1,29 @@
+name: Candidate idea
+description: Propose a harness change that the loop could evaluate
+labels: [candidate]
+body:
+  - type: textarea
+    id: finding
+    attributes:
+      label: What evidence do you have
+      description: A pattern you saw in transcripts, with counts if possible. A hunch is fine, but say that it is one.
+    validations:
+      required: true
+  - type: dropdown
+    id: lever
+    attributes:
+      label: Weakest lever that could work
+      options: [prompt, skill, script, tool, hook]
+    validations:
+      required: true
+  - type: textarea
+    id: candidate
+    attributes:
+      label: Candidate
+      description: The rows you would insert, and how you would know it worked.
+      render: json
+  - type: textarea
+    id: verify
+    attributes:
+      label: Deterministic check
+      description: A command that already exists in your project and would fail when the harness fails.

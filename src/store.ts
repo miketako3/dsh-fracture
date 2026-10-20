@@ -33,12 +33,17 @@ export class Store {
   get candidatesDir(): string { return join(this.baseDir, 'candidates') }
   get runsDir(): string { return join(this.baseDir, 'runs') }
   get lessonsPath(): string { return join(this.baseDir, 'lessons.md') }
+  get memoryDir(): string { return join(this.baseDir, 'memory') }
+  get skillsDir(): string { return join(this.baseDir, 'skills') }
+  get journalPath(): string { return join(this.baseDir, 'journal.md') }
 
   /** Create the base layout once; safe to call on every tool invocation. */
   async ensure(): Promise<void> {
     await mkdir(this.diagnosesDir, { recursive: true })
     await mkdir(this.candidatesDir, { recursive: true })
     await mkdir(this.runsDir, { recursive: true })
+    await mkdir(this.memoryDir, { recursive: true })
+    await mkdir(this.skillsDir, { recursive: true })
   }
 
   candidateDir(id: string): string {

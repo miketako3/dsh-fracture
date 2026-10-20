@@ -1,153 +1,133 @@
 # dsh-self-harness
 
-A self-improvement loop for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH), shipped as a DSH plugin.
+**A harness that rewrites itself, one measured change at a time.**
 
-The agent reads its own session history, diagnoses what its harness is doing badly, has a subagent write a candidate harness edit, **runs the same task twice** — once on the current harness, once with the candidate — and only then decides whether to keep the change.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that watches your sessions, learns what your agent keeps fumbling, writes the fix as data, and proves it on a second run before keeping it.
+
+[![CI](https://github.com/miketako3/dsh-self-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-self-harness/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/dsh-self-harness.svg)](https://www.npmjs.com/package/dsh-self-harness)
+[![license](https://img.shields.io/npm/l/dsh-self-harness.svg)](LICENSE)
+[![node](https://img.shields.io/node/v/dsh-self-harness.svg)](package.json)
 
 English | [日本語](README.ja.md)
 
 ```text
-self_diagnose ──► self_propose ──► self_probe ──► self_adopt
-     │                │                 │              │
- session log      candidate.json    two runs       bundle +
-   evidence        + rows/files     compared       lesson
+        ┌──────────────────────────── runs on its own ───────────────────────────┐
+        │                                                                        │
+  your session ──► observations ──► memory digest ──► skills ──► prompt section  │
+        │              (no model)      (every 20 turns)  (3 clean repeats)       │
+        │                                                                        │
+        └──────────── asks before it changes how you work ──────────────────────┘
+                                     │
+                     self_diagnose ──► self_propose ──► self_probe ──► self_adopt
+                        session log     candidate.json     two runs      bundle +
+                         evidence       + rows/files      compared       lesson
 ```
 
-Nothing here edits a running profile on its own. Every step writes files you can read, diff, and delete, and installing host code stays a human-approved action.
+## Two things happen
 
-## Why this shape
+**It learns without being asked.** Every finished turn is recorded as facts, not prose: which tools ran, in what order, what failed, whether you had to correct it. After twenty turns the log becomes a memory digest. After three clean repetitions of the same procedure, that procedure becomes a skill. The digest and the skill list are injected into the prompt as a small index, so the agent knows what it has learned without carrying the whole store.
 
-DSH composes an agent from an ordered list of Cordis plugin rows. A harness is therefore **data**, not code: adding a prompt section, a skill directory, a tool, or a policy is an edit to a row list. That makes the interesting operation cheap — you can hold two harnesses at once, run the same task on both, and compare.
+**It changes the harness only when a contrast says it should.** A prompt section, a skill directory, a tool toggle: those are rows in a plugin list, so a candidate harness is a diff against the current one. The plugin runs the same task twice, once on each harness, and compares tool errors, steps, and the deterministic `verify` command you supplied. Only a passing contrast becomes a bundle.
 
-Three ideas are borrowed from [Harness²](https://github.com/google-research/harness2) (Google Research, Apache-2.0):
+Everything it writes is a file you can read: `.dsh/self-harness/`.
 
-- **Contrast beats introspection.** A harness edit is judged by running the same task on the old and new harness, not by asking a model whether the edit sounds good.
-- **Lessons accumulate with evidence.** Each adoption appends a cue, the change, the probe verdict, and a rationale to `lessons.md`.
-- **Escalate from the weakest lever.** Prompt before skill, skill before script, script before tool, tool before hook.
+## What runs by itself
 
-Harness²'s eight-file harness tree is deliberately *not* adopted; DSH's row list already is that tree, with a loader.
+| Tier | Changes | Gate |
+| --- | --- | --- |
+| Memory | observations, digest, journal | none, additive |
+| Skills | `skills/<slug>/SKILL.md`, registered live | none, additive |
+| Composition | prompt rows, skill-dir rows, tool toggles | probe verdict plus a watch window, auto-revert on regression |
+| Code | a candidate plugin module | **human**: `dsh plugin add` |
+
+The first two tiers are knowledge. They cannot execute, cannot widen permissions, and are removed by deleting a file, so they run without asking. The third is a data change the loop owns and can undo, so it runs without asking but is watched and reverted if the numbers get worse. The fourth changes what code runs in your process, so the loop may author it and probe it, and you decide whether it runs.
+
+That line is deliberate. An agent that can install its own code without a human is an agent whose first bad change is unfalsifiable from the inside. Reasoning in [docs/AUTONOMY.md](docs/AUTONOMY.md).
 
 ## Install
 
 ```bash
-dsh plugin --profile web add dsh-self-harness   # or: pnpm add in the profile directory
+dsh plugin --profile web add dsh-self-harness
 ```
 
-Then restart the session. The plugin registers five tools and needs no configuration to start.
-
-Configuration lives in the profile patch:
+Restart once. No configuration is required: observation and memory start immediately.
 
 ```yaml
+# $DSH_HOME/profiles/web/cordis.patch.yml
 - id: self-harness
   name: dsh-self-harness
   config:
-    baseDir: .dsh/self-harness      # where candidates, runs, and lessons live
-    provider: spawn                 # subagent provider for proposer and in-process probes
-    dshCommand: dsh                 # binary used for out-of-process probes
-    profile: headless               # profile an out-of-process probe boots
-    timeoutMs: 900000               # per child run
-    isolate: true                   # copy the workspace per probe side
-    maxSessions: 12                 # sessions per diagnosis
-    packagePrefix: dsh-self-harness-candidate
-    profilePatch: ""                # profile patch that self_adopt may append to
+    autonomy: full        # off | memory | skills | full
+    baseDir: .dsh/self-harness
+    digestEvery: 20       # observed turns between digest rewrites
+    distillMinRepeats: 3  # clean repetitions before a skill is written
 ```
 
-## Quick start
+## Tools
 
-Ask the agent, in a session inside the repository you want it to work on:
-
-```text
-Run self_diagnose, pick the strongest finding, then self_propose for the task
-"add a test to the pagination module". Probe the candidate before adopting it.
-```
-
-Or drive it yourself, one step at a time:
+The slow path is also callable by hand, and it is what the loop uses internally.
 
 | Tool | What it does |
 | --- | --- |
-| `self_diagnose` | Reads the newest sessions and ranks findings: tool failure rates, repeated reads of one file, rejected approvals, compaction pressure, message feedback. Saves a snapshot. |
-| `self_propose` | Sends a proposer subagent that writes `candidates/<id>/candidate.json` plus optional `skills/` and `plugin/`. Every candidate is validated before it is accepted. |
-| `self_probe` | Runs one task on the current harness and on the candidate, in separate workspace copies, and compares trajectories and a deterministic check. Writes `runs/<id>/report.md`. |
-| `self_adopt` | Turns a probed candidate into an installable bundle and appends the lesson. Refuses anything that did not probe as `improved` unless forced. |
-| `self_status` | Lists candidates with the verdict of their newest probe. |
+| `self_diagnose` | Ranks what the current harness does badly: tool failure rates, repeated reads, denied approvals, compaction pressure, message feedback. |
+| `self_propose` | Sends a proposer subagent to write one candidate as `candidate.json` plus optional `skills/` or `plugin/`. |
+| `self_probe` | Runs a task on the current harness and on the candidate, then compares. Writes `runs/<id>/report.md`. |
+| `self_adopt` | Turns a probed candidate into an installable bundle and appends the lesson. Never installs. |
+| `self_status` | What was learned, what was proposed, how each candidate scored. |
+| `memory_search` | Searches the digest, past turns, and distilled skills. |
 
-A candidate is small on purpose:
+## Why this shape
 
-```json
-{
-  "id": "read-before-edit",
-  "title": "Require a read before editing an existing file",
-  "rationale": "The editor failed 6 of 9 times on files the agent had not opened.",
-  "finding": "tool-failures:edit",
-  "lever": "prompt",
-  "verify": "pnpm test",
-  "rows": [
-    {
-      "id": "system-prompt",
-      "name": "@deepseek-ai/dsh-system-prompt",
-      "config": { "personaSuffix": "Always read a file before editing it." }
-    }
-  ]
-}
+DSH composes an agent from an ordered list of Cordis plugin rows. A harness is therefore **data**: a prompt section, a skill root, a tool, a policy are all rows. Holding two harnesses at once and comparing them becomes cheap, which is what makes a self-improving loop honest — the alternative is asking a model whether its own idea sounds good.
+
+Three ideas are borrowed from [Harness²](https://github.com/google-research/harness2) (Google Research, Apache-2.0):
+
+- **Contrast beats introspection.** Judge the edit by running the task on both harnesses.
+- **Lessons accumulate with evidence.** Each adoption appends the cue, the change, the verdict, and a rationale to `lessons.md`.
+- **Escalate from the weakest lever.** Prompt before skill, skill before script, script before tool, tool before hook.
+
+Its eight-file harness tree is deliberately not adopted: DSH's row list already is that tree, with a loader.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  S[session events] -->|turn end| O[observe.ts<br/>per-turn facts]
+  O --> M[(memory<br/>observations.jsonl)]
+  M --> D[digest<br/>MEMORY.md]
+  M --> K[skills<br/>SKILL.md]
+  D --> P[prompt section<br/>titles only]
+  K --> P
+  K -->|ctx.skills.register| T[skill catalog]
+  O --> G{repeated<br/>and clean?}
+  G -->|yes| K
+  D -.->|evidence| X[self_diagnose]
+  X --> Y[self_propose] --> Z[self_probe] --> A[self_adopt]
+  Z -->|verdict| W[watch window<br/>auto-revert]
+  A --> B[bundle<br/>human installs]
 ```
 
-At most three rows per candidate, so that the probe can attribute an effect.
+Two safety properties worth knowing before reading the code:
 
-## What gets written
+- A candidate that ships a `plugin/` directory runs in a **separate `dsh` process**, so unverified code never loads in the process judging it.
+- Candidates that touch approval, sandbox policy, the plugin manager, or this plugin are rejected before they are stored, and again before they are probed.
 
-```text
-.dsh/self-harness/
-├── diagnoses/2026-10-20T02-11-08-471Z.json   # one snapshot per diagnosis
-├── candidates/read-before-edit/
-│   ├── candidate.json                        # source of truth
-│   ├── cordis.patch.yml                      # generated, for humans
-│   ├── skills/…, plugin/…                    # optional artifacts
-│   └── bundle/                               # created by self_adopt
-├── runs/2026-10-20T02-14…-read-before-edit/
-│   ├── baseline/, changed/                   # workspace copies
-│   ├── result.json
-│   └── report.md                             # both trajectories, verdict, caveat
-└── lessons.md                                # append-only
-```
-
-Nothing is hidden in a database. Delete the directory and the loop forgets everything.
-
-## Security model
-
-The loop is an agent editing the harness that runs it, so the design assumes that is dangerous.
-
-- **The approval surface is not editable.** Candidates touching `dsh-user-approval`, `dsh-sandbox-policy`, `plugin_manager`, or `dsh-self-harness` are rejected before they are stored.
-- **Unverified code never loads in the judging process.** A candidate that ships a plugin is probed in a separate `dsh` process against a generated patch. Only rows that reference already-loaded modules run in-process.
-- **Adoption does not install.** It produces a bundle plus instructions. Installing that bundle is `dsh plugin add` or the `plugin_manager` tool, whose per-call approval is the human gate.
-- **Probe runs are isolated.** Each side gets its own workspace copy; `node_modules` and `.git` are symlinked rather than copied.
-- **Rollback is subtraction.** Remove the bundle or its rows; there is no state to unwind.
-
-## Limits worth knowing
-
-- A probe is **one task on one harness pair**. `improved` means it helped here. Re-run on a task the probe has not seen before adopting.
-- Without a `verify` command the verdict is `needs-review`: both trajectories are shown and a human or rubric decides. Do not mistake that for evidence.
-- Diagnosis reads what sessions record. A tool that fails silently, or a harness problem that only shows up as slow answers, will not appear as a finding.
-- Out-of-process probes need a working `dsh` on `PATH` and a profile that can boot without interaction. Headless has no approval answerer, so a probe task that needs approval will fail closed by design.
-- Cost is two rollouts plus one diagnosis per candidate. Budget accordingly and keep candidates small.
-
-## Prior art
-
-- [Harness²](https://github.com/google-research/harness2) — recursive agent harnessing via editable harness surfaces. The contrast-based evaluation, the lesson accumulation, and the weakest-first escalation come from there. This project reuses the ideas, not the code.
-- Cordis and DSH's composition model, which makes a harness a declarative row list in the first place.
+Details in [SECURITY.md](SECURITY.md).
 
 ## Development
 
 ```bash
-npm install
-npm run typecheck
-npm test          # builds, then runs node --test
+npm install && npm test     # 100+ tests, no test framework dependency
 npm run build
 ```
 
-Source layout: `src/diagnose.ts` and `src/trajectory.ts` are pure and tested without a host; `src/probe.ts`, `src/propose.ts`, and `src/adopt.ts` orchestrate the loop; `src/index.ts` registers the tools.
+Contributions welcome; read [CONTRIBUTING.md](CONTRIBUTING.md) first, because most changes here move a boundary rather than add a feature.
 
-Design notes, including why Harness² is not vendored: [docs/DESIGN.md](docs/DESIGN.md).
+## Status
+
+v0.2 in progress. Observation, memory, skill distillation, and the live prompt section ship in this version. Probe-gated automatic composition and the UI panel are the next two items in [ROADMAP.md](ROADMAP.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. Harness² is credited for the ideas above and is not vendored.

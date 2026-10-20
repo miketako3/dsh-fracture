@@ -17,6 +17,12 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import z from '@deepseek-ai/schemastery'
 import { adopt, latestProbe } from './adopt.js'
+import { Autopilot } from './autopilot.js'
+import { installLive } from './live.js'
+import type { LiveAgent, LiveHandle } from './live.js'
+import { journal, searchMemory } from './memory.js'
+import type { Autonomy } from './policy.js'
+import type { RawEvent } from './types.js'
 import { diagnose } from './diagnose.js'
 import { candidateProblems } from './guard.js'
 import { propose } from './propose.js'
@@ -50,6 +56,12 @@ export interface Config {
   packagePrefix: string
   /** Profile patch that `self_adopt` appends to when `apply` is set. */
   profilePatch: string
+  /** How much the loop may do without being asked. `off` disables observation entirely. */
+  autonomy: Autonomy
+  /** Observed turns between memory digest rewrites. */
+  digestEvery: number
+  /** Clean repetitions before a procedure is written out as a skill. */
+  distillMinRepeats: number
 }
 
 export const Config: z<Config> = z.object({
@@ -62,6 +74,9 @@ export const Config: z<Config> = z.object({
   maxSessions: z.number().default(12),
   packagePrefix: z.string().default('dsh-self-harness-candidate'),
   profilePatch: z.string().default(''),
+  autonomy: z.union(['off', 'memory', 'skills', 'full']).default('full'),
+  digestEvery: z.number().default(20),
+  distillMinRepeats: z.number().default(3),
 })
 
 const OUTPUT = {
@@ -72,6 +87,9 @@ const OUTPUT = {
 function storeOf(config: Config): Store {
   return new Store(resolve(config.baseDir))
 }
+
+/** Events retained per session, enough for a diagnosis without unbounded growth. */
+const BUFFER_LIMIT = 2_000
 
 function requireAgent(exec: ToolRunContext): Agent {
   if (exec.agent === undefined) throw new Error('this tool needs a live agent; call it from a session, not from a nested dispatcher')
@@ -139,6 +157,78 @@ function renderProbe(result: Awaited<ReturnType<typeof runProbe>>, store: Store)
  */
 export function apply(ctx: Context, config: Config): void {
   const store = storeOf(config)
+  const pilot = new Autopilot(store, { digestEvery: config.digestEvery, distillMinRepeats: config.distillMinRepeats })
+  const buffers = new Map<string, RawEvent[]>()
+  const live = new Map<unknown, LiveHandle>()
+
+  const skillsFor = () => pilot.skills.map(skill => ({
+    name: skill.name,
+    description: skill.description,
+    content: skill.content,
+  }))
+
+  /** Attach the memory section and the distilled skills to one agent. */
+  const attach = (agent: unknown): void => {
+    if (live.has(agent)) return
+    try {
+      const handle = installLive(agent as LiveAgent, () => pilot.index)
+      handle.reconcile(skillsFor())
+      live.set(agent, handle)
+    } catch (error) {
+      void journal(store, `could not extend an agent: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  if (config.autonomy !== 'off') {
+    // The agents service is optional: a profile without it still gets tools and
+    // observation, just no prompt section to attach to.
+    const agents = ctx.get('agents') as { list(): unknown[] } | undefined
+    const attachAll = (): void => {
+      for (const agent of agents?.list() ?? []) attach(agent)
+    }
+
+    void pilot.load().then(attachAll).catch((error: unknown) => {
+      void journal(store, `autopilot could not load: ${error instanceof Error ? error.message : String(error)}`)
+    })
+
+    attachAll()
+    ctx.on('agent/created', ({ agent }) => {
+      attach(agent)
+      return undefined
+    })
+    ctx.on('agent/disposed', ({ agent }) => {
+      const handle = live.get(agent)
+      if (handle === undefined) return
+      live.delete(agent)
+      void handle.dispose()
+    })
+
+    ctx.on('session/event', (session, event) => {
+      const id = String(session.id)
+      const buffer = buffers.get(id) ?? []
+      buffer.push(event as RawEvent)
+      if (buffer.length > BUFFER_LIMIT) buffer.splice(0, buffer.length - BUFFER_LIMIT)
+      buffers.set(id, buffer)
+      if (event.type !== 'turn/end') return
+      void pilot.observe(id, buffer).then(result => {
+        if (result.skillsWritten.length > 0) {
+          for (const handle of live.values()) handle.reconcile(skillsFor())
+        }
+        return result
+      }).catch((error: unknown) => {
+        void journal(store, `observation failed: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    })
+
+    ctx.effect(() => {
+      const timer = setInterval(() => {
+        attachAll()
+        void pilot.refreshDigest().catch(() => undefined)
+      }, 15 * 60_000)
+      timer.unref()
+      return () => { clearInterval(timer) }
+    }, 'self-harness: idle refresh')
+  }
 
   ctx.tools.register(defineTool({
     name: 'self_diagnose',
@@ -311,8 +401,32 @@ export function apply(ctx: Context, config: Config): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'memory_search',
+    description: [
+      'Search what this harness has learned on its own: the memory digest, past turns, and distilled skills.',
+      'Use it before re-deriving a procedure or re-discovering a convention from a previous session.',
+    ].join(' '),
+    parameters: {
+      query: { type: 'string', required: true, description: 'Case-insensitive substring. An empty query returns the newest turns.' },
+      limit: { type: 'integer', description: 'Maximum hits. Defaults to 12.' },
+    },
+    output: OUTPUT,
+    async execute(args) {
+      const hits = await searchMemory(store, args.query, args.limit ?? 12)
+      if (hits.length === 0) return 'Nothing in memory matched that query.'
+      return [
+        `# Memory search: ${args.query}`,
+        '',
+        ...hits.map(hit => `- (${hit.kind}) ${hit.text}`),
+        '',
+        `Index and digest live under \`${store.memoryDir}\`.`,
+      ].join('\n')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'self_status',
-    description: 'List candidates in the self-harness base directory with the verdict of their newest probe.',
+    description: 'Show what the loop has learned, what it has proposed, and how each candidate scored.',
     parameters: {},
     output: OUTPUT,
     async execute() {
@@ -327,10 +441,18 @@ export function apply(ctx: Context, config: Config): void {
           rows.push(`- \`${id}\`: candidate.json is unreadable`)
         }
       }
+      const skills = pilot.skills
+      const latest = skills.slice(0, 12).map(skill => `  - \`${skill.name}\`: ${skill.description}`)
       return [
         '# Self-harness status',
         '',
         `- base: \`${store.baseDir}\``,
+        `- autonomy: \`${config.autonomy}\``,
+        `- turns observed: ${String(pilot.index.observations)}`,
+        `- digest sections: ${pilot.index.digestHeadings.length === 0 ? 'none yet' : pilot.index.digestHeadings.join(', ')}`,
+        `- distilled skills: ${String(skills.length)}`,
+        ...latest,
+        '',
         `- candidates: ${String(ids.length)}`,
         '',
         ...(ids.length === 0 ? ['_No candidates yet. Run `self_diagnose`, then `self_propose`._'] : rows),

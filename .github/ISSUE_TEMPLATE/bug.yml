@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in the loop behaves differently than documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste secrets, private repository content, or full session logs.
+        A probe report contains task text and file excerpts.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `npm view dsh-self-harness version`, or the git commit you ran.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which part
+      options:
+        - diagnose
+        - propose
+        - probe
+        - adopt
+        - memory and skills
+        - plugin loading
+        - documentation
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The tool output, and the relevant part of `runs/<id>/report.md` if a probe is involved.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Plugin config
+      description: The `self-harness` row from your profile patch, with anything private removed.
+      render: yaml

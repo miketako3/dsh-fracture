@@ -6,23 +6,34 @@ import test from 'node:test'
 import { apply, Config, inject, name } from '../lib/index.js'
 
 /** A context stub exposing only what plugin mounting touches. */
-function mount(baseDir, services = {}) {
-  const registered = []
+function mount(baseDir, services = {}, config = {}) {
+  const tools = []
+  const handlers = new Map()
+  const disposers = []
   const ctx = {
-    tools: { register: tool => registered.push(tool) },
+    tools: { register: tool => tools.push(tool) },
     get: key => services[key],
+    on: (event, handler) => {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler])
+      return () => {}
+    },
+    effect: (factory) => {
+      const dispose = factory()
+      disposers.push(dispose)
+      return dispose
+    },
   }
-  apply(ctx, Config({ baseDir }))
-  return registered
+  apply(ctx, Config({ baseDir, ...config }))
+  return { tools, handlers, disposers }
 }
 
-test('mounting registers the five loop tools', async () => {
+test('mounting registers the loop tools', async () => {
   const root = await mkdtemp(join(tmpdir(), 'self-harness-mount-'))
   try {
-    const registered = mount(root)
+    const { tools } = mount(root)
     assert.deepEqual(
-      registered.map(tool => tool.name).sort(),
-      ['self_adopt', 'self_diagnose', 'self_probe', 'self_propose', 'self_status'],
+      tools.map(tool => tool.name).sort(),
+      ['memory_search', 'self_adopt', 'self_diagnose', 'self_probe', 'self_propose', 'self_status'],
     )
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -32,7 +43,7 @@ test('mounting registers the five loop tools', async () => {
 test('every tool ships a description, a schema, and a renderer', async () => {
   const root = await mkdtemp(join(tmpdir(), 'self-harness-shape-'))
   try {
-    for (const tool of mount(root)) {
+    for (const tool of mount(root).tools) {
       assert.equal(typeof tool.description, 'string', tool.name)
       assert.ok(tool.description.length > 40, tool.name)
       assert.equal(typeof tool.parameters, 'object', tool.name)
@@ -47,13 +58,13 @@ test('every tool ships a description, a schema, and a renderer', async () => {
 test('the compiled parameter schema matches what the model will see', async () => {
   const root = await mkdtemp(join(tmpdir(), 'self-harness-params-'))
   try {
-    const probe = mount(root).find(tool => tool.name === 'self_probe')
+    const probe = mount(root).tools.find(tool => tool.name === 'self_probe')
     assert.equal(probe.parameters.type, 'object')
     assert.deepEqual(probe.parameters.required, ['candidateId', 'task'])
     assert.equal(probe.parameters.properties.isolate.type, 'boolean')
     assert.equal(typeof probe.parameters.properties.isolate.description, 'string')
 
-    const status = mount(root).find(tool => tool.name === 'self_status')
+    const status = mount(root).tools.find(tool => tool.name === 'self_status')
     assert.deepEqual(status.parameters, { type: 'object', properties: {} })
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -77,8 +88,8 @@ test('defaults resolve without a profile patch', () => {
 test('self_status works on an empty base directory', async () => {
   const root = await mkdtemp(join(tmpdir(), 'self-harness-status-'))
   try {
-    const registered = mount(root)
-    const status = registered.find(tool => tool.name === 'self_status')
+    const { tools } = mount(root)
+    const status = tools.find(tool => tool.name === 'self_status')
     const text = await status.execute({}, { callId: 'c', rootCallId: 'c', name: 'self_status', arguments: {}, signal: new AbortController().signal })
     assert.match(text, /candidates: 0/)
     assert.match(text, /self_diagnose/)
@@ -90,8 +101,8 @@ test('self_status works on an empty base directory', async () => {
 test('self_diagnose without a session reader fails with an actionable message', async () => {
   const root = await mkdtemp(join(tmpdir(), 'self-harness-diag-'))
   try {
-    const registered = mount(root)
-    const diagnose = registered.find(tool => tool.name === 'self_diagnose')
+    const { tools } = mount(root)
+    const diagnose = tools.find(tool => tool.name === 'self_diagnose')
     await assert.rejects(
       diagnose.execute({}, { callId: 'c', rootCallId: 'c', name: 'self_diagnose', arguments: {}, signal: new AbortController().signal }),
       /no session reader is installed/,
@@ -104,8 +115,8 @@ test('self_diagnose without a session reader fails with an actionable message', 
 test('self_probe without a live agent refuses instead of guessing one', async () => {
   const root = await mkdtemp(join(tmpdir(), 'self-harness-probe-'))
   try {
-    const registered = mount(root)
-    const probe = registered.find(tool => tool.name === 'self_probe')
+    const { tools } = mount(root)
+    const probe = tools.find(tool => tool.name === 'self_probe')
     await assert.rejects(
       probe.execute(
         { candidateId: 'x', task: 't' },
@@ -113,6 +124,56 @@ test('self_probe without a live agent refuses instead of guessing one', async ()
       ),
       /needs a live agent/,
     )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('memory_search on an empty store says so instead of inventing hits', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'self-harness-search-'))
+  try {
+    const { tools } = mount(root)
+    const search = tools.find(tool => tool.name === 'memory_search')
+    const text = await search.execute({ query: 'parser' }, { callId: 'c', rootCallId: 'c', name: 'memory_search', arguments: {}, signal: new AbortController().signal })
+    assert.match(text, /Nothing in memory matched/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('autonomy off leaves the session unwired', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'self-harness-off-'))
+  try {
+    const { handlers, disposers } = mount(root, {}, { autonomy: 'off' })
+    assert.equal(handlers.size, 0)
+    assert.equal(disposers.length, 0)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('the loop subscribes to sessions and agents by default', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'self-harness-wired-'))
+  try {
+    const { handlers, disposers } = mount(root)
+    assert.equal(handlers.has('session/event'), true)
+    assert.equal(handlers.has('agent/created'), true)
+    assert.equal(handlers.has('agent/disposed'), true)
+    assert.equal(disposers.length, 1)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('self_status reports autonomy and what was observed', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'self-harness-status2-'))
+  try {
+    const { tools } = mount(root)
+    const status = tools.find(tool => tool.name === 'self_status')
+    const text = await status.execute({}, { callId: 'c', rootCallId: 'c', name: 'self_status', arguments: {}, signal: new AbortController().signal })
+    assert.match(text, /autonomy: `full`/)
+    assert.match(text, /turns observed: 0/)
+    assert.match(text, /distilled skills: 0/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

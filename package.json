@@ -1,7 +1,7 @@
 {
   "name": "dsh-self-harness",
-  "version": "0.1.0",
-  "description": "Self-improvement loop for DeepSeek Harness: diagnose your own session evidence, propose a harness edit with a subagent, probe it against the unchanged harness, and adopt it as a plugin only when the contrast supports it.",
+  "version": "0.2.0",
+  "description": "A harness that rewrites itself, one measured change at a time: observe your DSH sessions, distil skills, propose harness edits, prove them on a second run.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
