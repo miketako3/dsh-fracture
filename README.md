@@ -113,11 +113,11 @@ The turn that failed (`fix the flaky export test`) appears under "What fails", a
 ## Install
 
 ```bash
-dsh plugin --profile web add github:miketako3/dsh-fracture    # current main
-dsh plugin --profile web add dsh-fracture                     # once it is on npm
+dsh plugin --profile web add dsh-fracture                     # 0.2.0 from npm
+dsh plugin --profile web add github:miketako3/dsh-fracture    # newest commits
 ```
 
-There is no npm release under this name yet, so the git form is the one that works: it installs from `main` and builds the package on the way in. The old name, `dsh-self-harness`, has a 0.1.0 release that predates the loop and memory described here.
+0.2.0 is on npm and contains the loop, the memory layer, and automatic apply. The git form tracks `main`, builds the package on install, and is what to use if you want a commit past the release. An earlier package name, `dsh-self-harness`, shipped one release (0.1.0) that predates all of this; do not install it.
 
 Restart once. No configuration is required: observation and memory start immediately.
 

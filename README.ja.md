@@ -114,11 +114,11 @@ journal.md
 ## 導入
 
 ```bash
+dsh plugin --profile web add dsh-fracture                     # npm の 0.2.0
 dsh plugin --profile web add github:miketako3/dsh-fracture    # main の最新
-dsh plugin --profile web add dsh-fracture                     # npm に出たあと
 ```
 
-この名前での npm 公開はまだない。動くのは git 形式で、`main` から取得し、インストール時にビルドする。旧名の `dsh-self-harness` には 0.1.0 があるが、ここで説明したループと記憶は入っていない。
+0.2.0 は npm にあり、ループ、記憶、自動適用が入っている。git 形式は `main` を追い、インストール時にビルドするので、公開版より新しいコミットを使いたいときに選ぶ。旧名の `dsh-self-harness` には 0.1.0 が一つあるだけで、ここで説明した機能は入っていない。入れてはいけない。
 
 一度だけ再起動する。設定は要らない。観察と記憶はその場で始まる。
 
