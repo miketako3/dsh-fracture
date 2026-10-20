@@ -12,6 +12,11 @@ import type { Candidate, PresetRow } from './types.js'
 
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
 
+/** A filesystem-safe, sortable UTC stamp for run and diagnosis directories. */
+export function timestamp(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-').toLowerCase()
+}
+
 /** Reject ids that could escape the base directory. */
 export function assertSafeId(id: string, what: string): string {
   if (!SAFE_ID.test(id) || id.includes('..')) {

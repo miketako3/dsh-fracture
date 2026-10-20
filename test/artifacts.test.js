@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { assertSafeId, renderPatch } from '../lib/store.js'
+import { assertSafeId, renderPatch, timestamp } from '../lib/store.js'
 import { candidateProblems, protectionOf } from '../lib/guard.js'
 import { verdictOf } from '../lib/probe.js'
 
@@ -33,6 +33,13 @@ test('row names must be plain tokens', () => {
 test('a config key that is not a plain identifier falls back to JSON', () => {
   const patch = renderPatch([{ name: 'x', config: { 'odd key': 1 } }])
   assert.match(patch, /^ {6}config: \{"odd key":1\}$/m)
+})
+
+test('a run stamp is usable as a directory name', () => {
+  const stamp = timestamp()
+  assert.equal(assertSafeId(stamp, 'stamp'), stamp)
+  assert.match(stamp, /^[0-9]{4}-[0-9]{2}-[0-9]{2}t[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}z$/)
+  assert.equal(assertSafeId(`${stamp}-read-before-edit`, 'run id').endsWith('-read-before-edit'), true)
 })
 
 test('ids that could escape the base directory are rejected', () => {

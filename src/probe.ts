@@ -19,7 +19,7 @@ import type { Candidate, ProbeMode, ProbeResult, ProbeSide, Verdict } from './ty
 import { EMPTY_TRAJECTORY, messageOf, runChild } from './child.js'
 import { renderTrajectory, trajectoryFromHeadless } from './trajectory.js'
 import { isolateWorkspace } from './workspace.js'
-import { writeJson, type Store } from './store.js'
+import { timestamp, writeJson, type Store } from './store.js'
 
 const execAsync = promisify(execCallback)
 
@@ -196,7 +196,7 @@ async function runWithCandidatePreset(
 export async function runProbe(request: ProbeRequest): Promise<ProbeResult> {
   const { ctx, store, settings, candidate, task, cwd, signal, agent } = request
   const mode = await probeMode(store, candidate)
-  const runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${candidate.id}`
+  const runId = `${timestamp()}-${candidate.id}`
   const runDir = store.runDir(runId)
   const startedAt = new Date().toISOString()
 

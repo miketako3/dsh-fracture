@@ -22,7 +22,7 @@ import { candidateProblems } from './guard.js'
 import { propose } from './propose.js'
 import { runProbe } from './probe.js'
 import { loadSessions } from './sessions.js'
-import { Store } from './store.js'
+import { Store, timestamp } from './store.js'
 import type { Candidate, Diagnosis } from './types.js'
 
 export const name = 'self-harness'
@@ -158,7 +158,7 @@ export function apply(ctx: Context, config: Config): void {
       const slices = await loadSessions(ctx, limit, exec.signal)
       if (slices.length === 0) return 'No stored sessions could be read, so there is nothing to diagnose yet.'
       const diagnosis = diagnose(slices.map(slice => slice.events))
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const stamp = timestamp()
       const savedPath = await store.saveDiagnosis({ ...diagnosis, sessionIds: slices.map(slice => slice.id) }, stamp)
       return renderDiagnosis(diagnosis, savedPath, slices.length)
     },

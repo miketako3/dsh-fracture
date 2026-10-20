@@ -8,7 +8,7 @@
  */
 
 import { access, cp, mkdir, rm, symlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 /** Directories copied as symlinks instead of content. */
 export const LINKED_DIRECTORIES = ['node_modules', '.git', '.venv', 'venv'] as const
@@ -57,7 +57,7 @@ export async function isolateWorkspace(
     dereference: false,
     filter: (from) => {
       if (excluded.has(from)) return false
-      const name = from.slice(from.lastIndexOf('/') + 1)
+      const name = basename(from)
       if (SKIPPED.has(name)) return false
       if (LINKED.has(name)) return false
       return true
