@@ -1,4 +1,4 @@
-/** Shared vocabulary for the self-harness loop. No I/O lives here. */
+/** Shared vocabulary for the fracture loop. No I/O lives here. */
 
 /** One row of a Cordis composition: the unit a candidate harness is made of. */
 export interface PresetRow {

@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: Output of `npm view dsh-self-harness version`, or the git commit you ran.
+      description: Output of `npm view dsh-fracture version`, or the git commit you ran.
     validations:
       required: true
   - type: dropdown
@@ -45,5 +45,5 @@ body:
     id: config
     attributes:
       label: Plugin config
-      description: The `self-harness` row from your profile patch, with anything private removed.
+      description: The `fracture` row from your profile patch, with anything private removed.
       render: yaml

@@ -12,8 +12,8 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'self-harness': {
-      readonly kind: 'self-harness'
+    'fracture': {
+      readonly kind: 'fracture'
       /** A one-off account, shown without expanding the row. */
       readonly form: 'notice'
       /** One line, bounded by the host's context summary limit. */
@@ -38,7 +38,7 @@ export function noticeMessage(text: string, summary?: string): UserMessage {
   return createUserMessage({
     content: [{ type: 'text', text }],
     source: {
-      kind: 'self-harness',
+      kind: 'fracture',
       form: 'notice',
       summary: boundContextSummary((summary ?? firstLine).trim()),
     },

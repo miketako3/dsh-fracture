@@ -17,7 +17,7 @@ import { Store } from '../lib/store.js'
 import { readDigest, readJournal } from '../lib/memory.js'
 import { listSkills } from '../lib/skills.js'
 
-const root = await mkdtemp(join(tmpdir(), 'self-harness-demo-'))
+const root = await mkdtemp(join(tmpdir(), 'fracture-demo-'))
 const store = new Store(root)
 await store.ensure()
 

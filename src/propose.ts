@@ -120,7 +120,7 @@ function buildPrompt(request: ProposeRequest): string {
     '## Rules',
     '',
     '- At most three rows. One effect per candidate, or the probe cannot attribute the result.',
-    '- Never touch approval, sandbox policy, the plugin manager, or `dsh-self-harness` itself.',
+    '- Never touch approval, sandbox policy, the plugin manager, or `dsh-fracture` itself.',
     '- `verify` should be a command that already exists in this repository and fails when the harness fails.',
     '  Omit it only when no such command exists.',
     '- Do not install anything, do not edit the profile, do not run `dsh`.',

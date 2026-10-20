@@ -23,9 +23,9 @@ The prompt-level part of the harness changes without a human.
 
 ## v0.4 — the part people can see
 
-- [ ] `dsh-self-harness` status panel in the web UI, once the client-plugin surface is settled
+- [ ] `dsh-fracture` status panel in the web UI, once the client-plugin surface is settled
 - [ ] Shareable candidate library, keyed by domain
-- [ ] `dsh self-harness` subcommand for the same operations outside a session
+- [ ] `dsh fracture` subcommand for the same operations outside a session
 
 ## Explicitly not planned
 

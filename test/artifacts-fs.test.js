@@ -9,7 +9,7 @@ import { Store, writeJson } from '../lib/store.js'
 import { adopt, latestProbe } from '../lib/adopt.js'
 
 async function scratch() {
-  return await mkdtemp(join(tmpdir(), 'self-harness-'))
+  return await mkdtemp(join(tmpdir(), 'fracture-'))
 }
 
 test('isolation copies the tree, skips build output, and links dependencies', async () => {
@@ -38,9 +38,9 @@ test('an excluded absolute directory is not copied', async () => {
   const root = await scratch()
   try {
     const source = join(root, 'src')
-    await mkdir(join(source, '.dsh', 'self-harness'), { recursive: true })
+    await mkdir(join(source, '.dsh', 'fracture'), { recursive: true })
     await writeFile(join(source, 'keep.txt'), 'k', 'utf8')
-    await writeFile(join(source, '.dsh', 'self-harness', 'big.json'), '{}', 'utf8')
+    await writeFile(join(source, '.dsh', 'fracture', 'big.json'), '{}', 'utf8')
     const isolated = await isolateWorkspace(source, join(root, 'copy'), [join(source, '.dsh')])
     assert.equal(existsSync(join(isolated.dir, 'keep.txt')), true)
     assert.equal(existsSync(join(isolated.dir, '.dsh')), false)
@@ -80,7 +80,7 @@ test('a candidate round-trips and its patch is regenerated', async () => {
 test('reading a missing candidate explains what to do', async () => {
   const root = await scratch()
   try {
-    await assert.rejects(new Store(root).readCandidate('nope'), /self_propose/)
+    await assert.rejects(new Store(root).readCandidate('nope'), /fracture_propose/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

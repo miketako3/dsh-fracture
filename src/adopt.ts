@@ -96,7 +96,7 @@ export async function adopt(store: Store, candidate: Candidate, settings: AdoptS
 
   const probe = await latestProbe(store, candidate.id)
   if (probe === undefined && !settings.force) {
-    throw new Error(`candidate ${candidate.id} has no probe result; run self_probe first, or pass force to adopt without evidence`)
+    throw new Error(`candidate ${candidate.id} has no probe result; run fracture_probe first, or pass force to adopt without evidence`)
   }
   if (probe !== undefined && probe.verdict !== 'improved' && !settings.force) {
     throw new Error(

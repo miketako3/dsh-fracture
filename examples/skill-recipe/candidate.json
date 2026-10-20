@@ -8,7 +8,7 @@
     {
       "name": "@deepseek-ai/dsh-skill-filesystem",
       "config": {
-        "customSkillDirs": [".dsh/self-harness/candidates/skill-recipe/skills"]
+        "customSkillDirs": [".dsh/fracture/candidates/skill-recipe/skills"]
       }
     }
   ],

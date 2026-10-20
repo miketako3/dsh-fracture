@@ -49,12 +49,12 @@ test('ids that could escape the base directory are rejected', () => {
   }
 })
 
-test('the self-harness surface is protected', () => {
+test('the fracture surface is protected', () => {
   for (const name of [
     '@deepseek-ai/dsh-user-approval',
     '@deepseek-ai/dsh-sandbox-policy',
     'dsh-plugin-manager',
-    'dsh-self-harness',
+    'dsh-fracture',
   ]) {
     assert.notEqual(protectionOf({ name }), undefined, name)
   }

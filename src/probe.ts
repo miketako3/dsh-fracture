@@ -166,14 +166,14 @@ async function runWithCandidatePreset(
   parent: Agent,
   signal: AbortSignal,
 ): Promise<ProbeSide> {
-  const presetId = `self-harness-${candidate.id}`
+  const presetId = `fracture-${candidate.id}`
   let unregister: (() => Promise<void>) | undefined
   try {
     // Rows come from JSON authored by the proposer; the registry's own entry
     // validation is the authority on whether they mount.
     unregister = await ctx.agentPresets.register({
       id: presetId,
-      name: `self-harness candidate ${candidate.id}`,
+      name: `fracture candidate ${candidate.id}`,
       description: candidate.title,
       plugins: candidate.rows as unknown as PresetDefinition['plugins'],
     })

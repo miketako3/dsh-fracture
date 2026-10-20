@@ -1,5 +1,5 @@
 /**
- * dsh-self-harness: let a DSH agent improve its own harness.
+ * dsh-fracture: let a DSH agent improve its own harness.
  *
  * The loop is diagnose → propose → probe → adopt. Each step is a tool the model
  * calls itself, and every artifact the loop produces is a file the user can
@@ -7,7 +7,7 @@
  * user's back: adoption produces a bundle, and installing that bundle stays a
  * human-approved action.
  *
- * @module dsh-self-harness
+ * @module dsh-fracture
  */
 
 import { join, resolve } from 'node:path'
@@ -37,7 +37,7 @@ import { loadSessions } from './sessions.js'
 import { Store, timestamp } from './store.js'
 import type { Candidate, Diagnosis } from './types.js'
 
-export const name = 'self-harness'
+export const name = 'fracture'
 
 /** The tools registry is the only hard dependency; session and subagent services are checked at use. */
 export const inject = ['tools']
@@ -60,7 +60,7 @@ export interface Config {
   maxSessions: number
   /** Prefix for the package name of an adopted candidate bundle. */
   packagePrefix: string
-  /** Profile patch that `self_adopt` appends to when `apply` is set. */
+  /** Profile patch that `fracture_adopt` appends to when `apply` is set. */
   profilePatch: string
   /** How much the loop may do without being asked. `off` disables observation entirely. */
   autonomy: Autonomy
@@ -84,14 +84,14 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  baseDir: z.string().default('.dsh/self-harness'),
+  baseDir: z.string().default('.dsh/fracture'),
   provider: z.string().default('spawn'),
   dshCommand: z.string().default('dsh'),
   profile: z.string().default('headless'),
   timeoutMs: z.number().default(900_000),
   isolate: z.boolean().default(true),
   maxSessions: z.number().default(12),
-  packagePrefix: z.string().default('dsh-self-harness-candidate'),
+  packagePrefix: z.string().default('dsh-fracture-candidate'),
   profilePatch: z.string().default(''),
   autonomy: z.union(['off', 'memory', 'skills', 'full']).default('full'),
   digestEvery: z.number().default(20),
@@ -153,7 +153,7 @@ function renderDiagnosis(diagnosis: Diagnosis, savedPath: string, shownSessions:
     '',
     ...findings,
     '',
-    'Next: `self_propose` with one finding id and the task the harness should handle better.',
+    'Next: `fracture_propose` with one finding id and the task the harness should handle better.',
   ].join('\n')
 }
 
@@ -175,7 +175,7 @@ function renderProbe(result: Awaited<ReturnType<typeof runProbe>>, store: Store)
     `Report: \`${join(store.runDir(result.runId), 'report.md')}\``,
     '',
     result.verdict === 'improved'
-      ? 'Next: read report.md, confirm the win on a second task, then `self_adopt`.'
+      ? 'Next: read report.md, confirm the win on a second task, then `fracture_adopt`.'
       : 'Next: read report.md and decide whether to revise the candidate or drop it.',
   ].filter(line => line !== '').join('\n')
 }
@@ -413,17 +413,17 @@ export function apply(ctx: Context, config: Config): void {
       timer.unref()
       return () => {
         clearInterval(timer)
-        lifetime.abort(new Error('self-harness is unloading'))
+        lifetime.abort(new Error('fracture is unloading'))
       }
-    }, 'self-harness: idle loop')
+    }, 'fracture: idle loop')
   }
 
   ctx.tools.register(defineTool({
-    name: 'self_diagnose',
+    name: 'fracture_diagnose',
     description: [
       'Read the newest stored sessions and rank what the current harness is doing badly.',
       'Reports tool failure rates, repeated reads, approval denials, compaction pressure, and message feedback,',
-      'saved as a snapshot under the self-harness base directory.',
+      'saved as a snapshot under the fracture base directory.',
       'Use this first; every later step cites a finding id from here.',
     ].join(' '),
     parameters: {
@@ -443,7 +443,7 @@ export function apply(ctx: Context, config: Config): void {
   }))
 
   ctx.tools.register(defineTool({
-    name: 'self_propose',
+    name: 'fracture_propose',
     description: [
       'Send a proposer subagent to write one candidate harness edit as data.',
       'A candidate is a short list of Cordis rows plus an optional skill or plugin file, stored under',
@@ -453,7 +453,7 @@ export function apply(ctx: Context, config: Config): void {
     ].join(' '),
     parameters: {
       task: { type: 'string', required: true, description: 'The task the harness should get better at. The probe runs this task.' },
-      finding: { type: 'string', description: 'Finding id from self_diagnose to target. Omit to let the proposer choose the strongest one.' },
+      finding: { type: 'string', description: 'Finding id from fracture_diagnose to target. Omit to let the proposer choose the strongest one.' },
       sessions: { type: 'integer', description: 'How many recent sessions the inline diagnosis reads.' },
       cwd: { type: 'string', description: 'Directory the proposer works in. Defaults to the process directory.' },
     },
@@ -489,14 +489,14 @@ export function apply(ctx: Context, config: Config): void {
         ...(rejected.length === 0 ? [] : ['', '## Rejected', ...rejected]),
         '',
         `Stored under \`${store.candidatesDir}\`.`,
-        accepted.length === 0 ? '' : 'Next: `self_probe` with a candidate id and the task to run.',
+        accepted.length === 0 ? '' : 'Next: `fracture_probe` with a candidate id and the task to run.',
         outcome.childMessage.trim() === '' ? '' : `## Proposer note\n\n${outcome.childMessage.trim().slice(0, 2_000)}`,
       ].filter(line => line !== '').join('\n')
     },
   }))
 
   ctx.tools.register(defineTool({
-    name: 'self_probe',
+    name: 'fracture_probe',
     description: [
       'Run one task twice, on the current harness and with the candidate rows inserted, and compare.',
       'Rows-only candidates run as a child agent in this process; a candidate that ships a plugin runs',
@@ -542,7 +542,7 @@ export function apply(ctx: Context, config: Config): void {
   }))
 
   ctx.tools.register(defineTool({
-    name: 'self_adopt',
+    name: 'fracture_adopt',
     description: [
       'Turn a probed candidate into an installable bundle under candidates/<id>/bundle/.',
       'Refuses unless the newest probe for that candidate came back improved, or force is set.',
@@ -592,7 +592,7 @@ export function apply(ctx: Context, config: Config): void {
   }))
 
   ctx.tools.register(defineTool({
-    name: 'self_loop',
+    name: 'fracture_loop',
     description: [
       'Run the whole loop once without further prompting: diagnose, propose, probe, and apply a prompt-level',
       'candidate if the contrast comes back improved.',
@@ -634,7 +634,7 @@ export function apply(ctx: Context, config: Config): void {
   }))
 
   ctx.tools.register(defineTool({
-    name: 'self_status',
+    name: 'fracture_status',
     description: 'Show what the loop has learned, what it has proposed, and how each candidate scored.',
     parameters: {},
     output: OUTPUT,
@@ -664,7 +664,7 @@ export function apply(ctx: Context, config: Config): void {
         '',
         `- candidates: ${String(ids.length)}`,
         '',
-        ...(ids.length === 0 ? ['_No candidates yet. Run `self_diagnose`, then `self_propose`._'] : rows),
+        ...(ids.length === 0 ? ['_No candidates yet. Run `fracture_diagnose`, then `fracture_propose`._'] : rows),
         '',
         `- lessons: \`${store.lessonsPath}\``,
       ].join('\n')

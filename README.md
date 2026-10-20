@@ -1,13 +1,11 @@
-# dsh-self-harness
+# dsh-fracture
 
-**A harness that rewrites itself, one measured change at a time.**
+A DSH plugin that reads your finished sessions, finds where the harness makes the agent stumble, writes the fix as data, and runs the task twice to check whether the fix helped.
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that watches your sessions, learns what your agent keeps fumbling, writes the fix as data, and proves it on a second run before keeping it.
-
-[![CI](https://github.com/miketako3/dsh-self-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-self-harness/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/dsh-self-harness.svg)](https://www.npmjs.com/package/dsh-self-harness)
-[![license](https://img.shields.io/npm/l/dsh-self-harness.svg)](LICENSE)
-[![node](https://img.shields.io/node/v/dsh-self-harness.svg)](package.json)
+[![CI](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/dsh-fracture.svg)](https://www.npmjs.com/package/dsh-fracture)
+[![license](https://img.shields.io/npm/l/dsh-fracture.svg)](LICENSE)
+[![node](https://img.shields.io/node/v/dsh-fracture.svg)](package.json)
 
 English | [日本語](README.ja.md)
 
@@ -17,29 +15,58 @@ English | [日本語](README.ja.md)
   your session ──► observations ──► memory digest ──► skills ──► prompt section  │
         │              (no model)      (every 20 turns)  (3 clean repeats)       │
         │                                                                        │
-        └──────────── asks before it changes how you work ──────────────────────┘
+        └──────────── changes how you work only after a measurement ────────────┘
                                      │
-                     self_diagnose ──► self_propose ──► self_probe ──► self_adopt
+                     fracture_diagnose ──► fracture_propose ──► fracture_probe ──► fracture_adopt
                         session log     candidate.json     two runs      bundle +
                          evidence       + rows/files      compared       lesson
 ```
 
-## Two things happen
+## What it is
 
-**It learns without being asked.** Every finished turn is recorded as facts, not prose: which tools ran, in what order, what failed, whether you had to correct it. After twenty turns the log becomes a memory digest. After three clean repetitions of the same procedure, that procedure becomes a skill. The digest and the skill list are injected into the prompt as a small index, so the agent knows what it has learned without carrying the whole store.
+DSH builds an agent out of an ordered list of plugin rows. A model, a prompt section, a skill root, a tool, an approval policy: each is a row with its own config. Two consequences follow. A harness is data, so a candidate harness is a diff against the current one. And two harnesses can exist at the same time, so a change can be judged by running the same task on both instead of asking a model whether its own idea sounds good.
 
-What it does is visible: a distilled skill, an applied change, and a revert each post one collapsed notice into the session. You do not have to read the journal to know the loop touched something.
+The name is the working metaphor. A harness gives way along particular lines: a tool called before the file was ever read, an approval prompt that arrives after the work is done, a procedure rediscovered every morning. Those lines are the fractures. Fracture finds them in the session log, and every change it keeps is aimed at one of them.
 
-**It changes the harness only when a contrast says it should.** A prompt section, a skill directory, a tool toggle: those are rows in a plugin list, so a candidate harness is a diff against the current one. The plugin runs the same task twice, once on each harness, and compares tool errors, steps, and the deterministic `verify` command you supplied. Only a passing contrast becomes a bundle.
+## The problem
 
-Everything it writes is a file you can read: `.dsh/self-harness/`.
+Three failures are common in a setup that nobody has time to tune.
+
+**The same mistake outlives the session.** A tool fails because the project uses pnpm, or because the fixture has to be built before the test runs. The model works it out, the session ends, and the next session starts from nothing.
+
+**Harness tuning is guesswork.** Someone edits the system prompt, decides the agent feels better, and has no way to check. The edit stays. The next edit lands on top of it. Two months later nobody knows which line is load-bearing.
+
+**Nothing accumulates.** When a session goes well, the procedure that made it go well is not written down anywhere the next session can read.
+
+All three have the same cause: nothing in the loop records what happened, and nothing tests a change against a baseline. Fracture adds both, and lets them run unattended.
+
+## What it does
+
+It records every finished turn as facts rather than prose: which tools ran, in which order, what failed, whether you had to step in and correct it. After twenty turns that log becomes a digest. After three clean repetitions of one procedure, the procedure becomes a skill. The digest and the skill list go into the prompt as a short index, so the agent knows what it has learned without carrying the whole store.
+
+It also changes the harness, but only where a measurement supports the change, and the depth of what it may change on its own is bounded:
+
+| Tier | What changes | Gate |
+| --- | --- | --- |
+| Memory | observations, digest, journal | none, additive |
+| Skills | `skills/<slug>/SKILL.md`, registered live | none, additive |
+| Composition | prompt rows, skill-dir rows, tool toggles | probe verdict plus a watch window, auto-revert on regression |
+| Code | a candidate plugin module | **human**: `dsh plugin add` |
+
+The first two tiers are knowledge. They cannot execute anything, cannot widen a permission, and are removed by deleting a file, so they run without asking. The third is a data change the loop owns and can undo, so it runs without asking but is watched for twelve turns afterwards and reverted if the numbers get worse. The fourth decides what code runs inside your process, so the loop may author it and probe it, and you decide whether it runs.
+
+That last line is deliberate. An agent that can install its own code needs no human in the loop to do it, and its first bad change would then be the one change it cannot detect from the inside.
+
+Everything it writes is a file you can read: `.dsh/fracture/`.
+
+A distilled skill, an applied change, and a revert each post one collapsed notice into the session, so the loop never acts silently. Nothing else does, because a notice per turn stops being information.
 
 ## See it without a model
 
-`npm run demo` feeds six synthetic turns through the same modules the plugin runs. No model, no network, no session. The output is what landed on disk:
+`npm run demo` feeds six synthetic turns through the same modules the plugin runs. No model, no network, no session. This is the output, and it is what landed on disk:
 
 ```text
-base directory: /var/folders/…/self-harness-demo-xxxx
+base directory: /var/folders/…/fracture-demo-xxxx
 
 digest rewritten after turn 4
 distilled auto-read-edit
@@ -81,39 +108,26 @@ journal.md
 - 2026-10-20T03:22:04.179Z memory digest rewritten from 6 turns
 ```
 
-The turn that failed (`fix the flaky export test`) is in "What fails" and its procedure never became a skill, because a corrected or failing run is not evidence that a procedure works. That is the whole idea in one screen.
-
-## What runs by itself
-
-| Tier | Changes | Gate |
-| --- | --- | --- |
-| Memory | observations, digest, journal | none, additive |
-| Skills | `skills/<slug>/SKILL.md`, registered live | none, additive |
-| Composition | prompt rows, skill-dir rows, tool toggles | probe verdict plus a watch window, auto-revert on regression |
-| Code | a candidate plugin module | **human**: `dsh plugin add` |
-
-The first two tiers are knowledge. They cannot execute, cannot widen permissions, and are removed by deleting a file, so they run without asking. The third is a data change the loop owns and can undo, so it runs without asking but is watched and reverted if the numbers get worse. The fourth changes what code runs in your process, so the loop may author it and probe it, and you decide whether it runs.
-
-That line is deliberate. An agent that can install its own code without a human is an agent whose first bad change is unfalsifiable from the inside. Reasoning in [docs/AUTONOMY.md](docs/AUTONOMY.md).
+The turn that failed (`fix the flaky export test`) appears under "What fails", and its procedure never became a skill, because a failed or corrected run is not evidence that a procedure works.
 
 ## Install
 
 ```bash
-dsh plugin --profile web add dsh-self-harness          # published release
-dsh plugin --profile web add github:miketako3/dsh-self-harness   # current main
+dsh plugin --profile web add dsh-fracture                     # published release
+dsh plugin --profile web add github:miketako3/dsh-fracture    # current main
 ```
 
-The npm registry still carries 0.1.0; the unattended loop, memory, and automatic apply below are on `main` and install with the git form (the package builds itself on install).
+The npm registry still carries 0.1.0. The unattended loop, memory, and automatic apply are on `main`, and the git form installs it with a build step.
 
 Restart once. No configuration is required: observation and memory start immediately.
 
 ```yaml
 # $DSH_HOME/profiles/web/cordis.patch.yml
-- id: self-harness
-  name: dsh-self-harness
+- id: fracture
+  name: dsh-fracture
   config:
     autonomy: full        # off | memory | skills | full
-    baseDir: .dsh/self-harness
+    baseDir: .dsh/fracture
     digestEvery: 20       # observed turns between digest rewrites
     distillMinRepeats: 3  # clean repetitions before a skill is written
     autoLoop: true        # let the 15 minute idle trigger run the whole loop
@@ -123,29 +137,29 @@ Restart once. No configuration is required: observation and memory start immedia
 
 ## Tools
 
-The slow path is also callable by hand, and it is what the loop uses internally.
+The loop uses these internally, and any of them can be called by hand.
 
 | Tool | What it does |
 | --- | --- |
-| `self_diagnose` | Ranks what the current harness does badly: tool failure rates, repeated reads, denied approvals, compaction pressure, message feedback. |
-| `self_propose` | Sends a proposer subagent to write one candidate as `candidate.json` plus optional `skills/` or `plugin/`. |
-| `self_probe` | Runs a task on the current harness and on the candidate, then compares. Writes `runs/<id>/report.md`. |
-| `self_adopt` | Turns a probed candidate into an installable bundle and appends the lesson. Never installs. |
-| `self_status` | What was learned, what was proposed, how each candidate scored. |
+| `fracture_diagnose` | Ranks what the current harness does badly: tool failure rates, repeated reads, denied approvals, compaction pressure, message feedback. |
+| `fracture_propose` | Sends a proposer subagent to write one candidate as `candidate.json` plus optional `skills/` or `plugin/`. |
+| `fracture_probe` | Runs a task on the current harness and on the candidate, then compares. Writes `runs/<id>/report.md`. |
+| `fracture_adopt` | Turns a probed candidate into an installable bundle and appends the lesson. Never installs. |
+| `fracture_status` | What was learned, what was proposed, how each candidate scored. |
+| `fracture_loop` | Runs diagnose → propose → probe → apply once, with the same gates the idle trigger uses. |
 | `memory_search` | Searches the digest, past turns, and distilled skills. |
-| `self_loop` | Runs diagnose → propose → probe → apply once, with the same gates the idle trigger uses. |
 
-## Why this shape
+## Where the ideas come from
 
-DSH composes an agent from an ordered list of Cordis plugin rows. A harness is therefore **data**: a prompt section, a skill root, a tool, a policy are all rows. Holding two harnesses at once and comparing them becomes cheap, which is what makes a self-improving loop honest — the alternative is asking a model whether its own idea sounds good.
+[Harness²](https://github.com/google-research/harness2) (Google Research, Apache-2.0) is the direct source for three ideas, all of which this plugin implements:
 
-Three ideas are borrowed from [Harness²](https://github.com/google-research/harness2) (Google Research, Apache-2.0):
-
-- **Contrast beats introspection.** Judge the edit by running the task on both harnesses.
-- **Lessons accumulate with evidence.** Each adoption appends the cue, the change, the verdict, and a rationale to `lessons.md`.
+- **Contrast beats introspection.** Judge an edit by running the task on both harnesses, not by asking a model to review it.
+- **Lessons accumulate with evidence.** Every adoption appends the cue, the change, the verdict, and a rationale to `lessons.md`.
 - **Escalate from the weakest lever.** Prompt before skill, skill before script, script before tool, tool before hook.
 
-Its eight-file harness tree is deliberately not adopted: DSH's row list already is that tree, with a loader.
+Harness²'s eight-file harness tree is deliberately not adopted. DSH's row list already is that tree, with a loader and a diff, so copying the tree would add a second way to describe the same thing.
+
+The rest is DSH's own material: plugin rows for composition, the `SKILL.md` convention for procedures, `session/event` for observation, and scoped prompt sections for injection. No Harness² code is vendored.
 
 ## Architecture
 
@@ -160,33 +174,32 @@ flowchart LR
   K -->|ctx.skills.register| T[skill catalog]
   O --> G{repeated<br/>and clean?}
   G -->|yes| K
-  D -.->|evidence| X[self_diagnose]
-  X --> Y[self_propose] --> Z[self_probe] --> A[self_adopt]
+  D -.->|evidence| X[fracture_diagnose]
+  X --> Y[fracture_propose] --> Z[fracture_probe] --> A[fracture_adopt]
   Z -->|verdict| W[watch window<br/>auto-revert]
   A --> B[bundle<br/>human installs]
 ```
 
-Two safety properties worth knowing before reading the code:
+Two properties matter before reading the code:
 
-- A candidate that ships a `plugin/` directory runs in a **separate `dsh` process**, so unverified code never loads in the process judging it.
+- A candidate that ships a `plugin/` directory runs in a separate `dsh` process, so unverified code never loads in the process that judges it.
 - Candidates that touch approval, sandbox policy, the plugin manager, or this plugin are rejected before they are stored, and again before they are probed.
 
-Details in [SECURITY.md](SECURITY.md).
+Details in [SECURITY.md](SECURITY.md). The reasoning behind the tier boundaries is in [docs/AUTONOMY.md](docs/AUTONOMY.md).
 
 ## Development
 
 ```bash
-npm install && npm test     # 100+ tests, no test framework dependency
+npm install && npm test     # 128 tests, node:test only
 npm run build
+npm run demo                # the loop without a model
 ```
 
-Contributions welcome; read [CONTRIBUTING.md](CONTRIBUTING.md) first, because most changes here move a boundary rather than add a feature.
+Contributions are welcome, but read [CONTRIBUTING.md](CONTRIBUTING.md) first, because most changes here move a boundary rather than add a feature.
 
 ## Status
 
-v0.2 ships observation, memory, skill distillation, the live prompt section, an unattended loop, in-session notices, and automatic apply with auto-revert for prompt-level candidates. Row-shaped candidates still go through a bundle and a human. A UI panel is the next item in [ROADMAP.md](ROADMAP.md).
-
-How a change is applied without a restart, and why that is narrower than "rewrite the harness": [docs/AUTONOMY.md](docs/AUTONOMY.md#the-shape-of-an-automatic-apply).
+0.2 covers observation, memory, skill distillation, the live prompt section, the unattended loop, in-session notices, and automatic apply with auto-revert for prompt-level candidates. Row-shaped candidates still go through a bundle and a human. A UI panel is the next item in [ROADMAP.md](ROADMAP.md).
 
 ## License
 

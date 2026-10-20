@@ -1,10 +1,10 @@
 # Security
 
-`dsh-self-harness` is a plugin that lets an agent change its own harness. Treat it as a privileged component, because that is what it is.
+`dsh-fracture` is a plugin that lets an agent change its own harness. Treat it as a privileged component, because that is what it is.
 
 ## Report a vulnerability
 
-Open a private advisory: <https://github.com/miketako3/dsh-self-harness/security/advisories/new>. Do not file a public issue for anything that could let a candidate escape a boundary described below.
+Open a private advisory: <https://github.com/miketako3/dsh-fracture/security/advisories/new>. Do not file a public issue for anything that could let a candidate escape a boundary described below.
 
 ## Threat model
 
@@ -12,7 +12,7 @@ The loop has four ways to hurt you. Each one is answered by a boundary, and the 
 
 ### 1. The loop widens its own permissions
 
-If a candidate could edit `dsh-user-approval` or `dsh-sandbox-policy`, the first change would make every later change easier to justify. That path is closed by `src/guard.ts`: candidate rows mentioning approval, sandbox policy, the plugin manager, or `dsh-self-harness` are rejected before they are stored, and again before they are probed or adopted.
+If a candidate could edit `dsh-user-approval` or `dsh-sandbox-policy`, the first change would make every later change easier to justify. That path is closed by `src/guard.ts`: candidate rows mentioning approval, sandbox policy, the plugin manager, or `dsh-fracture` are rejected before they are stored, and again before they are probed or adopted.
 
 The check is name-based and conservative. A false rejection costs one proposal; a false acceptance costs the boundary.
 
@@ -24,7 +24,7 @@ Code-bearing candidates therefore run in a separate `dsh` process with the candi
 
 ### 3. Installed code is installed without consent
 
-`self_adopt` produces a bundle and instructions. It does not install. Installing is `dsh plugin add` or the `plugin_manager` tool, whose per-call approval is the human gate.
+`fracture_adopt` produces a bundle and instructions. It does not install. Installing is `dsh plugin add` or the `plugin_manager` tool, whose per-call approval is the human gate.
 
 `apply: true` with a configured `profilePatch` writes rows into a profile patch instead. That is a file write inside the workspace, visible in the same patch the user reviews, and it cannot introduce new code — only rows naming packages the profile can already resolve.
 

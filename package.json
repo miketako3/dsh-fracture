@@ -1,5 +1,5 @@
 {
-  "name": "dsh-self-harness",
+  "name": "dsh-fracture",
   "version": "0.2.0",
   "description": "A harness that rewrites itself, one measured change at a time: observe your DSH sessions, distil skills, propose harness edits, prove them on a second run.",
   "type": "module",
@@ -35,12 +35,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/miketako3/dsh-self-harness.git"
+    "url": "git+https://github.com/miketako3/dsh-fracture.git"
   },
   "bugs": {
-    "url": "https://github.com/miketako3/dsh-self-harness/issues"
+    "url": "https://github.com/miketako3/dsh-fracture/issues"
   },
-  "homepage": "https://github.com/miketako3/dsh-self-harness#readme",
+  "homepage": "https://github.com/miketako3/dsh-fracture#readme",
   "engines": {
     "node": ">=22"
   },

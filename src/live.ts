@@ -46,7 +46,7 @@ export interface LiveAgent {
 }
 
 /** Section name; stable so a remount replaces rather than duplicates. */
-export const SECTION_NAME = 'self-harness:memory'
+export const SECTION_NAME = 'fracture:memory'
 
 /** Order used when the host does not publish one for our slot. */
 const FALLBACK_ORDER = 8_500
@@ -66,7 +66,7 @@ export function renderIndex(index: MemoryIndex, maxSkills = 8): string {
   return [
     '## What this harness has learned',
     '',
-    '`dsh-self-harness` accumulates this on its own from past sessions. Read it before re-deriving it.',
+    '`dsh-fracture` accumulates this on its own from past sessions. Read it before re-deriving it.',
     '',
     ...parts,
     '',

@@ -2,7 +2,7 @@
 
 Two candidate shapes, one for each way the loop can change a harness.
 
-A candidate is a directory under `<baseDir>/candidates/<id>/` containing `candidate.json` and, optionally, `skills/` and `plugin/`. These files are what `self_propose` writes and what `self_probe` and `self_adopt` read.
+A candidate is a directory under `<baseDir>/candidates/<id>/` containing `candidate.json` and, optionally, `skills/` and `plugin/`. These files are what `fracture_propose` writes and what `fracture_probe` and `fracture_adopt` read.
 
 ## `prompt-addendum`: applied live
 
@@ -32,7 +32,7 @@ A row-shaped candidate cannot be applied to a live agent. It is probed in a chil
 | `id` | no | Directory name; defaults to the directory it was found in. |
 | `title` | yes | One line for the status view. |
 | `rationale` | yes | Why this helps, tied to the finding. |
-| `finding` | yes | Finding id from `self_diagnose`. |
+| `finding` | yes | Finding id from `fracture_diagnose`. |
 | `lever` | yes | `prompt`, `skill`, `script`, `tool`, or `hook`. |
 | `rows` | yes | Cordis rows to insert. May be empty for a prompt-only or skill-only candidate. |
 | `verify` | no | Shell command that exits non-zero when the harness fails. |

@@ -1,6 +1,6 @@
 # Autonomy
 
-v0.1 shipped a toolkit: the model calls `self_diagnose`, `self_propose`, `self_probe`, `self_adopt`. That is not self-improvement, it is assisted improvement.
+v0.1 shipped a toolkit: the model calls `fracture_diagnose`, `fracture_propose`, `fracture_probe`, `fracture_adopt`. That is not self-improvement, it is assisted improvement.
 
 This document defines the next shape: a plugin that **runs by itself** — accumulating memory, distilling skills, and changing the harness without being asked — and the boundaries that keep that autonomy from being a liability.
 
@@ -84,7 +84,7 @@ Applying means the plugin re-composes its own layer: the rows live in a file the
 
 The loop can write a plugin, validate that it parses, probe it out of process, and produce a bundle. It then posts a message into the session:
 
-> authored `candidate-7` (hook: deny edits to files not read in this session). Probe: improved. Bundle at `.dsh/self-harness/candidates/candidate-7/bundle`. Install with `dsh plugin --profile web add <path>`, or run `self_adopt` to stage it.
+> authored `candidate-7` (hook: deny edits to files not read in this session). Probe: improved. Bundle at `.dsh/fracture/candidates/candidate-7/bundle`. Install with `dsh plugin --profile web add <path>`, or run `fracture_adopt` to stage it.
 
 That message is the handoff. The human gate is one command, not a research project.
 
@@ -121,7 +121,7 @@ Autonomy without visibility is how trust dies. Every automatic action produces:
 
 - one line in `journal.md`, append-only;
 - one compact message in the session for anything above T0 (`applied`, `reverted`, `authored`, `skipped: budget`);
-- a `self_status` view that shows the current tier, the last five actions, the open watch window, and the budget remaining.
+- a `fracture_status` view that shows the current tier, the last five actions, the open watch window, and the budget remaining.
 
 T0 actions stay in the journal only. A message per memory update would be noise.
 
@@ -150,17 +150,17 @@ Filled in as each tier lands. Until a row is marked done, treat the tier as desi
 | Live skill registration | **done** — `agent.ctx.skills.register`, reconciled when the distiller writes a file |
 | Probe-gated T2 apply | **done for prompt-only candidates** — `src/apply.ts` registers an agent-scoped section after an `improved` verdict; a row-shaped candidate is refused with the reason |
 | Watch window and auto-revert | **done** — `Autopilot.openWatch` records the baseline, `evaluateWatch` compares the turns that followed, and the plugin disposes the section on a revert |
-| Session notifications | **done** — `src/notice.ts` injects a `self-harness` source kind with `form: 'notice'`, which renders as a collapsed context row and does not start a turn |
+| Session notifications | **done** — `src/notice.ts` injects a `fracture` source kind with `form: 'notice'`, which renders as a collapsed context row and does not start a turn |
 | Budget accounting | **done** — `src/policy.ts` counters, consulted by `src/autoloop.ts` before a loop and enforced by `Autopilot.noteLoop` / `noteProbe` / `noteFailure` |
 | T3 authoring with handoff message | the manual loop does this; the handoff message is the tool's return text |
-| Unattended loop | **done** — `src/autoloop.ts` gates it and the 15 minute idle trigger or `self_loop` runs it; requires a repeated task and a finding above `low` |
+| Unattended loop | **done** — `src/autoloop.ts` gates it and the 15 minute idle trigger or `fracture_loop` runs it; requires a repeated task and a finding above `low` |
 
 ### The shape of an automatic apply
 
 A row cannot be inserted into a running agent, so the automatic path is narrower than the design first assumed:
 
 1. The candidate must carry `prompt` text and no rows. `applyability()` returns the reason when it does not.
-2. The text becomes a section named `self-harness:candidate:<id>` at order 9950, above the memory index, below the tool descriptions.
+2. The text becomes a section named `fracture:candidate:<id>` at order 9950, above the memory index, below the tool descriptions.
 3. The watch window opens with the metrics of the last `watchTurns` turns as its baseline.
 4. When the window is due, the turns recorded since `appliedAtIso` are compared. A failure rate rise above 5 points, mean steps above 25 percent, or prompt tokens above 15 percent disposes the section.
 5. The revert is journaled and counted; two in a row park composition changes for the session.
@@ -180,6 +180,6 @@ These are the facts the implementation depends on, recorded because they are not
 
 ## 9. Why not full autonomy
 
-A plausible reading of "automatic" is: let the loop install its own code too. That would make `dsh-self-harness` a program that can rewrite itself without a human, and the first genuinely bad change would be unfalsifiable from inside the system. The tiers above exist because the useful part of autonomy (memory, skills, prompt-level composition) does not require that power, and the dangerous part is a single command away.
+A plausible reading of "automatic" is: let the loop install its own code too. That would make `dsh-fracture` a program that can rewrite itself without a human, and the first genuinely bad change would be unfalsifiable from inside the system. The tiers above exist because the useful part of autonomy (memory, skills, prompt-level composition) does not require that power, and the dangerous part is a single command away.
 
 If someone wants it anyway, the honest way to offer it is a config flag that requires an explicit acknowledgement file in the base directory, not a default.

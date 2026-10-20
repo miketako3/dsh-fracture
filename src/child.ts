@@ -61,7 +61,7 @@ async function startChild(
   try {
     const activation = await ctx.subagents.startActivation({
       provider,
-      label: agentPreset === undefined ? 'self-harness' : `self-harness ${agentPreset}`,
+      label: agentPreset === undefined ? 'fracture' : `fracture ${agentPreset}`,
       request: {
         parent,
         prompt: [{ type: 'text', text: prompt }],

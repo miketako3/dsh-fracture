@@ -15,11 +15,11 @@ export const PROTECTED_ROWS: readonly string[] = [
   'dsh-sandbox-policy',
   'dsh-plugin-manager',
   'plugin_manager',
-  'dsh-self-harness',
+  'dsh-fracture',
 ]
 
 /** Substrings that mark a row as part of the loop's own control surface. */
-const PROTECTED_FRAGMENTS = ['approval', 'sandbox', 'plugin-manager', 'pluginManager', 'self-harness']
+const PROTECTED_FRAGMENTS = ['approval', 'sandbox', 'plugin-manager', 'pluginManager', 'fracture']
 
 /** Why a row is protected, or undefined when it is free to edit. */
 export function protectionOf(row: PresetRow): string | undefined {

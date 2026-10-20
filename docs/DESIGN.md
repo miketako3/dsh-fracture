@@ -1,6 +1,6 @@
 # Design
 
-This document records the decisions behind `dsh-self-harness`, including the options that were rejected. It assumes you have read the README.
+This document records the decisions behind `dsh-fracture`, including the options that were rejected. It assumes you have read the README.
 
 ## 1. The problem
 
@@ -27,7 +27,7 @@ That is why this project does **not** vendor or fork Harness². The thing Harnes
 ## 3. The loop
 
 ```text
-self_diagnose  →  self_propose  →  self_probe  →  self_adopt
+fracture_diagnose  →  fracture_propose  →  fracture_probe  →  fracture_adopt
    evidence        candidate        contrast        artifact
 ```
 
@@ -106,7 +106,7 @@ The loop must not be able to change the rules that constrain it. `src/guard.ts` 
 | `dsh-user-approval` | A candidate that weakens approval makes every later candidate easier to adopt. |
 | `dsh-sandbox-policy` | Same, for filesystem and process boundaries. |
 | `plugin_manager` | A candidate that can install packages can install anything. |
-| `dsh-self-harness` | The loop editing itself mid-flight has no stable subject. |
+| `dsh-fracture` | The loop editing itself mid-flight has no stable subject. |
 
 The check is name-based and therefore conservative: it rejects by substring, so a legitimate row whose id happens to contain "approval" is refused. That trade is intentional; a false rejection costs one proposal, a false acceptance costs the boundary.
 

@@ -1,8 +1,8 @@
-# The self-harness bundle patch.
+# The fracture bundle patch.
 #
 # One row: the plugin registers its tools, services and prompt section when it
 # loads. Every model-facing tool is declared here rather than inside apply() so
 # a profile can disable or re-scope one without editing code.
 - insert:
-    - id: self-harness
-      name: dsh-self-harness
+    - id: fracture
+      name: dsh-fracture

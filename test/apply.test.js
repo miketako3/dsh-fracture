@@ -43,8 +43,8 @@ test('only a prompt-only candidate can be applied live', () => {
 })
 
 test('the override carries a unique, sanitized section name', () => {
-  assert.equal(sectionNameFor('Cand_1!'), 'self-harness:candidate:cand_1-')
-  assert.equal(sectionNameFor('a/b'), 'self-harness:candidate:a-b')
+  assert.equal(sectionNameFor('Cand_1!'), 'fracture:candidate:cand_1-')
+  assert.equal(sectionNameFor('a/b'), 'fracture:candidate:a-b')
   const override = overrideOf(candidate({ prompt: '  use pnpm  ' }))
   assert.equal(override.text, '  use pnpm  ')
   assert.equal(override.order, 9_950)
@@ -70,7 +70,7 @@ test('an applied override is a section that dispose removes', async () => {
   }
   const applied = applyOverride(agent, overrideOf(candidate({ prompt: 'prefer pnpm' })))
   assert.equal(sections.length, 1)
-  assert.equal(sections[0].name, 'self-harness:candidate:cand-1')
+  assert.equal(sections[0].name, 'fracture:candidate:cand-1')
   assert.equal(sections[0].text(), 'prefer pnpm')
   await revertOverride(applied)
   assert.equal(sections[0].complete, undefined)
@@ -101,7 +101,7 @@ test('the window pair separates before and after', () => {
 })
 
 test('a watch opens, is judged, and can revert', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'self-harness-watch-'))
+  const root = await mkdtemp(join(tmpdir(), 'fracture-watch-'))
   try {
     const store = new Store(root)
     await store.ensure()
@@ -140,7 +140,7 @@ test('a watch opens, is judged, and can revert', async () => {
 })
 
 test('a clean watch closes without reverting', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'self-harness-watch2-'))
+  const root = await mkdtemp(join(tmpdir(), 'fracture-watch2-'))
   try {
     const store = new Store(root)
     await store.ensure()
@@ -168,7 +168,7 @@ test('a clean watch closes without reverting', async () => {
 })
 
 test('the watch survives a restart', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'self-harness-watch3-'))
+  const root = await mkdtemp(join(tmpdir(), 'fracture-watch3-'))
   try {
     const store = new Store(root)
     await store.ensure()

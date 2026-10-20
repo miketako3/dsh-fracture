@@ -11,7 +11,7 @@ import { listSkills } from '../lib/skills.js'
 const NOW = Date.UTC(2026, 9, 20, 3, 0, 0)
 
 async function scratch() {
-  const root = await mkdtemp(join(tmpdir(), 'self-harness-auto-'))
+  const root = await mkdtemp(join(tmpdir(), 'fracture-auto-'))
   const store = new Store(root)
   await store.ensure()
   return { root, store }

@@ -5,8 +5,8 @@ Thanks for looking. This project has an unusual constraint that shapes everythin
 ## Development
 
 ```bash
-git clone https://github.com/miketako3/dsh-self-harness
-cd dsh-self-harness
+git clone https://github.com/miketako3/dsh-fracture
+cd dsh-fracture
 npm install
 npm run typecheck
 npm test

@@ -41,7 +41,7 @@ export function applyability(candidate: Candidate): { ok: true } | { ok: false; 
 /** Section name for a candidate; names are unique per id. */
 export function sectionNameFor(candidateId: string): string {
   const safe = candidateId.toLowerCase().replace(/[^a-z0-9._-]+/g, '-')
-  return `self-harness:candidate:${safe}`
+  return `fracture:candidate:${safe}`
 }
 
 /**
