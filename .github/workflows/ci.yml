@@ -5,8 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -21,6 +28,32 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build
-      - name: check the bundle manifest ships the patch
-        run: node -e "const p=require('./package.json');if(!p.dsh?.bundle?.patch)process.exit(1);console.log('bundle patch:',p.dsh.bundle.patch)"
+      - name: run the loop once over synthetic turns
+        run: npm run demo
+
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: pack the way a git install does
+        run: npm pack
+      - name: the tarball must carry the runtime and not the tests
+        run: |
+          set -euo pipefail
+          tar -tzf dsh-fracture-*.tgz | sed 's|^package/||' | sort > /tmp/entries.txt
+          for path in lib/index.js lib/types/index.d.ts cordis.patch.yml LICENSE README.md README.ja.md docs; do
+            if ! grep -qx "$path" /tmp/entries.txt && ! grep -q "^$path/" /tmp/entries.txt; then
+              echo "missing from the tarball: $path"
+              exit 1
+            fi
+          done
+          if grep -q '^test/' /tmp/entries.txt; then
+            echo 'the tarball should not ship tests'
+            exit 1
+          fi
+          echo "tarball entries: $(wc -l < /tmp/entries.txt)"

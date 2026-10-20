@@ -7,3 +7,6 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# fracture writes its state under the process directory by default
+.dsh/

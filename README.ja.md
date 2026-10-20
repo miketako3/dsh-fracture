@@ -163,7 +163,8 @@ allowBuilds:
 | 文書 | 内容 |
 | --- | --- |
 | [docs/仕組み.md](docs/仕組み.md) | 設計、4つの段、いつ動くか、監視の閾値、変更してはいけない範囲 |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 開発の進め方と、変更が境界を動かすときに求めていること |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 開発の進め方、リリースの手順、変更が境界を動かすときに求めていること |
+| [CHANGELOG.md](CHANGELOG.md) | 版ごとの変更点 |
 
 ## 参考にしたもの
 

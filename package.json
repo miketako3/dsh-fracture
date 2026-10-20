@@ -17,6 +17,7 @@
     "lib/**/*.js",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
+    "CHANGELOG.md",
     "LICENSE",
     "README.md",
     "README.ja.md",
@@ -31,7 +32,8 @@
     "self-improvement",
     "agent-harness",
     "agent-memory",
-    "skills"
+    "skills",
+    "autonomous-agents"
   ],
   "license": "MIT",
   "repository": {
@@ -51,7 +53,8 @@
     "test": "npm run build && node --test test/*.test.js",
     "prepare": "npm run build",
     "prepublishOnly": "npm run typecheck && npm run test && npm run build",
-    "demo": "npm run build && node demo/run.mjs"
+    "demo": "npm run build && node demo/run.mjs",
+    "check": "npm run typecheck && npm test"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.5 <5",
@@ -83,5 +86,6 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
-  }
+  },
+  "author": "miketako3"
 }

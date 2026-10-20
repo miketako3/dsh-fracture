@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 仕組みを知りたい
+    url: https://github.com/miketako3/dsh-fracture/blob/main/docs/%E4%BB%95%E7%B5%84%E3%81%BF.md
+    about: 4 つの段、いつ動くか、何を変更させないかを説明しています。
+  - name: 導入で詰まった
+    url: https://github.com/miketako3/dsh-fracture/blob/main/README.ja.md#%E5%B0%8E%E5%85%A5
+    about: pnpm の allowBuilds で一度止まる件もここに書いてあります。
+  - name: 脆弱性を報告したい
+    url: https://github.com/miketako3/dsh-fracture/security/advisories/new
+    about: 公開の issue には書かないでください。
