@@ -119,6 +119,7 @@ The loop uses these internally, and any of them can be called by hand.
 | [README.ja.md](README.ja.md) | The same introduction in Japanese |
 | [docs/仕組み.md](docs/仕組み.md) | How it works: the four tiers, the triggers, the watch window, the protected surface |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development, release steps, and what a good pull request looks like |
+| [SECURITY.md](SECURITY.md) | What counts as a vulnerability and what is design |
 | [CHANGELOG.md](CHANGELOG.md) | What changed in each version |
 
 The design and contribution documents are written in Japanese. That is a deliberate choice: they are read by the person who maintains the loop, and a translated design document loses the precision that makes it useful.

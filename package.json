@@ -18,6 +18,7 @@
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE",
     "README.md",
     "README.ja.md",
