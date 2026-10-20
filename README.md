@@ -80,6 +80,8 @@ dsh plugin --profile web add github:miketako3/dsh-fracture
 
 That is the distribution path. It installs from the repository and builds the package on the way in.
 
+pnpm refuses to run build scripts of a git-hosted package by default, so the first attempt fails with `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. Copy the `allowBuilds` line the error prints into `$DSH_HOME/profiles/web/pnpm-workspace.yaml` and run the command again. The key contains the fetched commit hash, so it changes whenever main moves.
+
 Restart once. No configuration is required: observation and memory start immediately.
 
 ```yaml

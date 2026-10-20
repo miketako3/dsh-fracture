@@ -97,6 +97,22 @@ dsh plugin --profile web add github:miketako3/dsh-fracture
 これが配布の経路です。
 リポジトリから取得し、インストール時にビルドします。
 
+pnpm は git から取ったパッケージのビルドを既定で止めます。
+最初のインストールは、次のエラーで終わります。
+
+```text
+[ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED] Failed to prepare git-hosted package
+```
+
+メッセージに出る `allowBuilds` の行を、そのまま `$DSH_HOME/profiles/web/pnpm-workspace.yaml` に足して、もう一度実行してください。
+行には取得したコミットのハッシュが入ります。
+main が進むとハッシュが変わるので、更新のたびに同じ手順が要ります。
+
+```yaml
+allowBuilds:
+  dsh-fracture@https://codeload.github.com/miketako3/dsh-fracture/tar.gz/<hash>: true
+```
+
 一度だけ再起動してください。
 設定は要りません。
 観察と記憶はその場で始まります。
