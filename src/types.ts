@@ -123,6 +123,19 @@ export interface ProbeSide {
   readonly error?: string
 }
 
+/**
+ * A rubric score attached to a probe.
+ *
+ * Deliberately loose here: `judge.ts` owns the shape, and typing it twice would
+ * let the two drift.
+ */
+export interface ProbeJudge {
+  readonly score?: { readonly baseline: number; readonly changed: number; readonly verdict: Verdict; readonly reason: string }
+  readonly raw: string
+  readonly error?: string
+  readonly childId?: string
+}
+
 /** The persisted result of one probe. */
 export interface ProbeResult {
   readonly runId: string
@@ -133,6 +146,8 @@ export interface ProbeResult {
   readonly reason: string
   readonly baseline: ProbeSide
   readonly changed: ProbeSide
+  /** Present when the judge ran; absent when the flag is off or a check decided. */
+  readonly judge?: ProbeJudge
   readonly startedAt: string
   readonly finishedAt: string
 }

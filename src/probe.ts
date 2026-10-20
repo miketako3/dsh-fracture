@@ -19,6 +19,8 @@ import type { Candidate, ProbeMode, ProbeResult, ProbeSide, Verdict } from './ty
 import { EMPTY_TRAJECTORY, messageOf, runChild } from './child.js'
 import { firstPromptTokensFromHeadless, renderTrajectory, trajectoryFromHeadless } from './trajectory.js'
 import { isolateWorkspace } from './workspace.js'
+import { judge, renderJudge } from './judge.js'
+import type { JudgeOutcome } from './judge.js'
 import { timestamp, writeJson, type Store } from './store.js'
 
 const execAsync = promisify(execCallback)
@@ -30,6 +32,8 @@ export interface ProbeSettings {
   readonly profile: string
   readonly timeoutMs: number
   readonly isolate: boolean
+  /** Whether to score the two sides with a second model when no check exists. */
+  readonly judge: 'off' | 'rubric'
 }
 
 /** Everything one probe needs from the host. */
@@ -240,7 +244,28 @@ export async function runProbe(request: ProbeRequest): Promise<ProbeResult> {
     ].filter(part => part !== '').join('\n')
   }
 
-  const decided = verdictOf(hasVerify, baseline.passed, changed.passed)
+  let decided = verdictOf(hasVerify, baseline.passed, changed.passed)
+  let judgement: JudgeOutcome | undefined
+  if (!hasVerify && settings.judge === 'rubric') {
+    judgement = await judge({
+      ctx,
+      provider: settings.provider,
+      parent: agent,
+      task,
+      baseline,
+      changed,
+      cwd: changedCwd,
+      signal,
+    })
+    const scored = judgement.score
+    decided = scored === undefined
+      ? { verdict: 'needs-review', reason: `No deterministic check, and the judge produced no score: ${judgement.error ?? 'unknown reason'}.` }
+      : {
+          verdict: scored.verdict,
+          reason: `No deterministic check; a rubric read scored the current harness ${String(scored.baseline)}/5 and the candidate ${String(scored.changed)}/5. ${scored.reason}`,
+        }
+  }
+
   const result: ProbeResult = {
     runId,
     candidateId: candidate.id,
@@ -250,6 +275,7 @@ export async function runProbe(request: ProbeRequest): Promise<ProbeResult> {
     reason: decided.reason,
     baseline,
     changed,
+    ...(judgement === undefined ? {} : { judge: judgement }),
     startedAt,
     finishedAt: new Date().toISOString(),
   }
@@ -257,7 +283,7 @@ export async function runProbe(request: ProbeRequest): Promise<ProbeResult> {
   await store.ensure()
   await mkdir(runDir, { recursive: true })
   await writeJson(join(runDir, 'result.json'), result)
-  await writeFile(join(runDir, 'report.md'), renderReport(result, candidate, verifyDetail), 'utf8')
+  await writeFile(join(runDir, 'report.md'), renderReport(result, candidate, verifyDetail, judgement), 'utf8')
   return result
 }
 
@@ -276,7 +302,7 @@ function tokenRows(result: ProbeResult): string[] {
   ]
 }
 
-function renderReport(result: ProbeResult, candidate: Candidate, verifyDetail: string): string {
+function renderReport(result: ProbeResult, candidate: Candidate, verifyDetail: string, judgement?: JudgeOutcome): string {
   return [
     `# Probe ${result.runId}`,
     '',
@@ -313,6 +339,7 @@ function renderReport(result: ProbeResult, candidate: Candidate, verifyDetail: s
     '',
     renderTrajectory(result.changed.trajectory),
     '',
+    ...(judgement === undefined ? [] : ['## Rubric read', '', renderJudge(judgement), '']),
     '## Read this before adopting',
     '',
     'One task is one observation. A verdict of `improved` means only that this candidate',

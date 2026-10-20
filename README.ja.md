@@ -131,6 +131,8 @@ allowBuilds:
     autoLoop: true        # 15分ごとの自動実行を許す
     autoApply: true       # 試行で改善したプロンプト候補を適用する
     watchTurns: 12        # 適用した変更を監視するターン数
+    maxWatches: 3         # 同時に監視できる変更の数
+    judge: off            # off | rubric。検査の無い候補を別のモデルに採点させる
 ```
 
 | 設定 | 既定 | 説明 |
@@ -142,6 +144,8 @@ allowBuilds:
 | `autoLoop` | `true` | 15分ごとの自動実行を許します |
 | `autoApply` | `true` | 試行で改善したプロンプト候補を適用します |
 | `watchTurns` | `12` | 適用した変更を監視するターン数です |
+| `maxWatches` | `3` | 同時に監視できる変更の数です |
+| `judge` | `off` | `rubric` にすると、検査の無い候補を別のモデルが5段階で採点します |
 
 ## ツール
 
@@ -153,6 +157,7 @@ allowBuilds:
 | `fracture_diagnose` | 今のハーネスで問題が起きている順に並べます。ツールの失敗率、同じファイルの読み直し、拒否された承認、圧縮の圧力、メッセージの評価を見ます |
 | `fracture_propose` | 提案役のサブエージェントに、候補を一つ書かせます。`candidate.json` と、必要なら `skills/` か `plugin/` です |
 | `fracture_probe` | 同じ仕事を今のハーネスと候補で実行し、比べます。`runs/<id>/report.md` を残します |
+| `fracture_plan` | 依頼を、確かめられる受け入れ条件に変える。作れないときは、作れないと答える |
 | `fracture_adopt` | 試行済みの候補を導入できるバンドルにし、教訓を追記します。導入そのものはしません |
 | `fracture_status` | 何を記録し、何を提案し、各候補がどう評価されたかを返します |
 | `fracture_loop` | 診断から適用までを一度だけ実行します。15分ごとの自動実行と同じ条件を通ります |

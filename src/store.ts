@@ -8,6 +8,7 @@
 
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { Criteria } from './criteria.js'
 import type { Candidate, PresetRow } from './types.js'
 
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/
@@ -36,6 +37,7 @@ export class Store {
   get memoryDir(): string { return join(this.baseDir, 'memory') }
   get skillsDir(): string { return join(this.baseDir, 'skills') }
   get journalPath(): string { return join(this.baseDir, 'journal.md') }
+  get criteriaDir(): string { return join(this.baseDir, 'criteria') }
 
   /** Create the base layout once; safe to call on every tool invocation. */
   async ensure(): Promise<void> {
@@ -44,6 +46,7 @@ export class Store {
     await mkdir(this.runsDir, { recursive: true })
     await mkdir(this.memoryDir, { recursive: true })
     await mkdir(this.skillsDir, { recursive: true })
+    await mkdir(this.criteriaDir, { recursive: true })
   }
 
   candidateDir(id: string): string {
@@ -104,6 +107,41 @@ export class Store {
     }
     const separator = existing.endsWith('\n') ? '\n' : '\n\n'
     await writeFile(this.lessonsPath, `${existing}${separator}${markdown.trimEnd()}\n`, 'utf8')
+  }
+
+  /** Persist criteria for one task and return the path. */
+  async writeCriteria(criteria: Criteria): Promise<string> {
+    const path = join(this.criteriaDir, `${assertSafeId(criteria.id, 'criteria id')}.json`)
+    await writeJson(path, criteria)
+    return path
+  }
+
+  /** Read criteria by id, or undefined when there is none. */
+  async readCriteria(id: string): Promise<Criteria | undefined> {
+    try {
+      return JSON.parse(await readFile(join(this.criteriaDir, `${assertSafeId(id, 'criteria id')}.json`), 'utf8')) as Criteria
+    } catch {
+      return undefined
+    }
+  }
+
+  /** Criteria whose task matches this one exactly, ignoring surrounding space. */
+  async criteriaForTask(task: string): Promise<Criteria | undefined> {
+    for (const id of await this.listCriteriaIds()) {
+      const criteria = await this.readCriteria(id)
+      if (criteria !== undefined && criteria.task.trim() === task.trim()) return criteria
+    }
+    return undefined
+  }
+
+  /** Ids of every stored criteria record, oldest name first. */
+  async listCriteriaIds(): Promise<string[]> {
+    try {
+      const entries = await readdir(this.criteriaDir)
+      return entries.filter(name => name.endsWith('.json')).map(name => name.slice(0, -'.json'.length)).sort()
+    } catch {
+      return []
+    }
   }
 
   /** Remove one run directory (probe workspaces are large). */

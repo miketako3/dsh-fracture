@@ -96,6 +96,8 @@ Restart once. No configuration is required: observation and memory start immedia
     autoLoop: true        # let the 15 minute idle trigger run the whole loop
     autoApply: true       # apply a prompt-only candidate that probed improved
     watchTurns: 12        # turns watched before an applied change is kept
+    maxWatches: 3         # changes watched at the same time
+    judge: off            # off | rubric; score a candidate that has no check
 ```
 
 ## Tools
@@ -107,6 +109,7 @@ The loop uses these internally, and any of them can be called by hand.
 | `fracture_diagnose` | Ranks what the current harness does badly: tool failure rates, repeated reads, denied approvals, compaction pressure, message feedback. |
 | `fracture_propose` | Sends a proposer subagent to write one candidate as `candidate.json` plus optional `skills/` or `plugin/`. |
 | `fracture_probe` | Runs a task on the current harness and on the candidate, then compares. Writes `runs/<id>/report.md`. |
+| `fracture_plan` | Turn a request into checks that can be run or read |
 | `fracture_adopt` | Turns a probed candidate into an installable bundle and appends the lesson. Never installs. |
 | `fracture_status` | What was learned, what was proposed, how each candidate scored. |
 | `fracture_loop` | Runs diagnose → propose → probe → apply once, with the same gates the idle trigger uses. |

@@ -32,6 +32,8 @@ import type { RawEvent } from './types.js'
 import { diagnose } from './diagnose.js'
 import { candidateProblems } from './guard.js'
 import { propose } from './propose.js'
+import { runChild } from './child.js'
+import { buildCriteriaPrompt, parseCriteria, renderCriteria } from './criteria.js'
 import { runProbe } from './probe.js'
 import { loadSessions } from './sessions.js'
 import { Store, timestamp } from './store.js'
@@ -80,6 +82,13 @@ export interface Config {
   maxProbesPerHour: number
   /** Turns that must pass after a loop before the next one may start. */
   minTurnsBetweenLoops: number
+  /**
+   * How to judge a probe that has no deterministic check.
+   *
+   * `off` leaves it as `needs-review` for a human. `rubric` asks a second model
+   * to score both trajectories; that is one opinion, and the report says so.
+   */
+  judge: 'off' | 'rubric'
   /** Let the idle trigger run the whole loop without being asked. */
   autoLoop: boolean
 }
@@ -103,6 +112,7 @@ export const Config: z<Config> = z.object({
   maxLoopsPerHour: z.number().default(2),
   maxProbesPerHour: z.number().default(1),
   minTurnsBetweenLoops: z.number().default(8),
+  judge: z.union(['off', 'rubric']).default('off'),
   autoLoop: z.boolean().default(true),
 })
 
@@ -222,6 +232,20 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   /**
+   * Give a candidate the task's stored check when it declares none.
+   * @param candidate - the candidate as authored.
+   * @param task - the task the probe will run.
+   * @returns the candidate, possibly with a `verify` borrowed from the criteria.
+   */
+  const withTaskVerify = async (candidate: Candidate, task: string): Promise<Candidate> => {
+    if ((candidate.verify ?? '').trim() !== '') return candidate
+    const criteria = await store.criteriaForTask(task)
+    if (criteria?.verify === undefined) return candidate
+    await journal(store, `using the stored check for "${task.trim()}" on ${candidate.id}: ${criteria.verify}`)
+    return { ...candidate, verify: criteria.verify }
+  }
+
+  /**
    * Put a prompt-only candidate live on one agent and start watching it.
    * @param agent - the agent whose prompt changes.
    * @param candidate - a candidate that passed its probe.
@@ -315,6 +339,7 @@ export function apply(ctx: Context, config: Config): void {
       }
 
       await pilot.noteProbe(Date.now())
+      const checked = await withTaskVerify(candidate, chosen)
       const result = await runProbe({
         ctx,
         store,
@@ -324,8 +349,9 @@ export function apply(ctx: Context, config: Config): void {
           profile: config.profile,
           timeoutMs: config.timeoutMs,
           isolate: config.isolate,
+          judge: config.judge,
         },
-        candidate,
+        candidate: checked,
         task: chosen,
         cwd: process.cwd(),
         agent,
@@ -452,6 +478,62 @@ export function apply(ctx: Context, config: Config): void {
     },
   }))
 
+
+  ctx.tools.register(defineTool({
+    name: 'fracture_plan',
+    description: [
+      'Turn a request into acceptance criteria before any work starts.',
+      'Writes criteria/<id>.json with two to five checks, preferring a command that exits non-zero while the task is not done.',
+      'When the request cannot be made checkable it refuses and says why, rather than inventing a check.',
+      'A probe for the same task uses the first command check when the candidate declares no verify of its own.',
+    ].join(' '),
+    parameters: {
+      task: { type: 'string', required: true, description: 'The request, verbatim.' },
+      force: { type: 'boolean', description: 'Rewrite even when criteria for this task already exist.' },
+    },
+    output: OUTPUT,
+    async execute(args, exec) {
+      await store.ensure()
+      const existing = await store.criteriaForTask(args.task)
+      if (existing !== undefined && args.force !== true) {
+        return `${renderCriteria(existing)}\n\n_Reused. Pass \`force\` to rewrite._`
+      }
+
+      // Criteria written against what has been failing are the ones worth having;
+      // a generic "run the tests" is what a model writes without evidence.
+      const observations = await readObservations(store, 60)
+      const failures = new Map<string, number>()
+      for (const observation of observations) {
+        for (const failure of observation.failures) {
+          const key = `${failure.tool} fails with ${failure.code}`
+          failures.set(key, (failures.get(key) ?? 0) + 1)
+        }
+      }
+      const context = [...failures.entries()].sort((left, right) => right[1] - left[1]).slice(0, 3).map(([key, count]) => `${key} (${String(count)}x)`)
+
+      const run = await runChild(
+        ctx,
+        config.provider,
+        requireAgent(exec),
+        buildCriteriaPrompt(args.task, context),
+        process.cwd(),
+        exec.signal,
+      )
+      const raw = run.side.trajectory.finalText.trim()
+      const criteria = parseCriteria(raw, args.task, new Date().toISOString())
+      if (criteria === undefined) {
+        return [
+          'The planner did not produce usable criteria.',
+          '',
+          raw === '' ? '_It returned nothing._' : `\`\`\`text\n${raw.slice(0, 2_000)}\n\`\`\``,
+        ].join('\n')
+      }
+      const path = await store.writeCriteria(criteria)
+      await journal(store, `criteria for "${args.task.trim()}" written to ${path} (${String(criteria.checks.length)} checks)`)
+      return renderCriteria(criteria)
+    },
+  }))
+
   ctx.tools.register(defineTool({
     name: 'fracture_propose',
     description: [
@@ -524,8 +606,9 @@ export function apply(ctx: Context, config: Config): void {
     output: OUTPUT,
     async execute(args, exec) {
       const agent = requireAgent(exec)
-      const candidate = await store.readCandidate(args.candidateId)
-      const effective: Candidate = args.verify === undefined ? candidate : { ...candidate, verify: args.verify }
+      const stored = await store.readCandidate(args.candidateId)
+      const candidate: Candidate = args.verify === undefined ? stored : { ...stored, verify: args.verify }
+      const effective = await withTaskVerify(candidate, args.task)
       const problems = candidateProblems(effective)
       if (problems.length > 0) throw new Error(`candidate ${candidate.id} is not probeable:\n- ${problems.join('\n- ')}`)
       const result = await runProbe({
@@ -537,6 +620,7 @@ export function apply(ctx: Context, config: Config): void {
           profile: config.profile,
           timeoutMs: config.timeoutMs,
           isolate: args.isolate ?? config.isolate,
+          judge: config.judge,
         },
         candidate: effective,
         task: args.task,
@@ -677,6 +761,7 @@ export function apply(ctx: Context, config: Config): void {
         `- watching: ${pilot.watches.length === 0 ? 'nothing' : pilot.watches.map(watch => `\`${watch.candidateId}\` until turn ${String(watch.dueAtTurn)}`).join(', ')}`,
         ...latest,
         '',
+        `- criteria: ${String((await store.listCriteriaIds()).length)}`,
         `- candidates: ${String(ids.length)}`,
         '',
         ...(ids.length === 0 ? ['_No candidates yet. Run `fracture_diagnose`, then `fracture_propose`._'] : rows),

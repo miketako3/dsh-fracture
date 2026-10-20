@@ -32,6 +32,8 @@ Node 22 以降が必要です。
 | `src/memory.ts` | 観察の記録、ダイジェスト、ジャーナル、検索 |
 | `src/guard.ts` | 変更してはいけない範囲 |
 | `src/probe.ts` | 両側の実行と判定 |
+| `src/judge.ts` | 検査の無い候補を、別のモデルに採点させる |
+| `src/criteria.ts` | 依頼を、確かめられる条件に変える |
 | `src/propose.ts`、`src/adopt.ts` | 候補の作成とバンドルの生成 |
 | `src/child.ts`、`src/sessions.ts` | ホストとの接点。子エージェントとセッションの読み出し |
 

@@ -33,7 +33,7 @@ test('mounting registers the loop tools', async () => {
     const { tools } = mount(root)
     assert.deepEqual(
       tools.map(tool => tool.name).sort(),
-      ['fracture_adopt', 'fracture_diagnose', 'fracture_loop', 'fracture_probe', 'fracture_propose', 'fracture_status', 'memory_search'],
+      ['fracture_adopt', 'fracture_diagnose', 'fracture_loop', 'fracture_plan', 'fracture_probe', 'fracture_propose', 'fracture_status', 'memory_search'],
     )
   } finally {
     await rm(root, { recursive: true, force: true })
