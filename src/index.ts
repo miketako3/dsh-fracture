@@ -24,6 +24,7 @@ import { Autopilot } from './autopilot.js'
 import { installLive } from './live.js'
 import type { LiveAgent, LiveHandle } from './live.js'
 import { journal, readObservations, searchMemory } from './memory.js'
+import { notify } from './notice.js'
 import { DEFAULT_POLICY, tierAllowed } from './policy.js'
 import type { Autonomy, PolicyConfig } from './policy.js'
 import { pickTask, shouldAutoLoop } from './autoloop.js'
@@ -237,6 +238,11 @@ export function apply(ctx: Context, config: Config): void {
       const recent = await readObservations(store, config.watchTurns)
       await pilot.openWatch(candidate.id, metricsFrom(recent), config.watchTurns)
       await journal(store, `applied ${candidate.id} to a live agent; watching ${String(config.watchTurns)} turns`)
+      notify(
+        agent as Agent,
+        `Applied \`${candidate.id}\` to this session's prompt (section \`${override.sectionName}\`).\n\n${candidate.prompt ?? ''}\n\nWatching ${String(config.watchTurns)} turns; reverting on its own if the numbers get worse.`,
+        `applied ${candidate.id}, watching ${String(config.watchTurns)} turns`,
+      )
       return `applied live as section \`${override.sectionName}\`; watching ${String(config.watchTurns)} turns.`
     } catch (error) {
       await journal(store, `apply of ${candidate.id} failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -317,7 +323,10 @@ export function apply(ctx: Context, config: Config): void {
       })
       await pilot.noteSuccess()
       await journal(store, `auto loop: ${candidate.id} probed ${result.verdict} on "${chosen}"`)
-      if (result.verdict !== 'improved') return `probed ${candidate.id}: ${result.verdict}, not applied`
+      if (result.verdict !== 'improved') {
+        await journal(store, `auto loop: ${candidate.id} probed ${result.verdict}, not applied`)
+        return `probed ${candidate.id}: ${result.verdict}, not applied`
+      }
       const applied = await autoApplyCandidate(agent, candidate)
       return `probed ${candidate.id}: improved. ${applied}`
     } catch (error) {
@@ -331,7 +340,8 @@ export function apply(ctx: Context, config: Config): void {
   if (config.autonomy !== 'off') {
     // The agents service is optional: a profile without it still gets tools and
     // observation, just no prompt section to attach to.
-    const agents = ctx.get('agents') as { list(): unknown[] } | undefined
+    const agents = ctx.get('agents') as { list(): unknown[]; get?(id: string): unknown } | undefined
+    const agentFor = (sessionId: string): Agent | undefined => agents?.get?.(sessionId) as Agent | undefined
     const attachAll = (): void => {
       for (const agent of agents?.list() ?? []) attach(agent)
     }
@@ -362,6 +372,14 @@ export function apply(ctx: Context, config: Config): void {
       void pilot.observe(id, buffer).then(async result => {
         if (result.skillsWritten.length > 0) {
           for (const handle of live.values()) handle.reconcile(skillsFor())
+          const agent = agentFor(id)
+          if (agent !== undefined) {
+            notify(
+              agent,
+              `Distilled ${String(result.skillsWritten.length)} skill(s): ${result.skillsWritten.join(', ')}.\n\nThey are registered on this session and listed in the prompt index.`,
+              `distilled ${result.skillsWritten.join(', ')}`,
+            )
+          }
         }
         if (result.watch?.revert === true) {
           const applied = overrides.get(result.watch.candidateId)
@@ -369,6 +387,10 @@ export function apply(ctx: Context, config: Config): void {
             overrides.delete(result.watch.candidateId)
             await revertOverride(applied)
             await journal(store, `reverted ${result.watch.candidateId}: ${result.watch.reason}`)
+            const agent = agentFor(id)
+            if (agent !== undefined) {
+              notify(agent, `Reverted \`${result.watch.candidateId}\`: ${result.watch.reason}.`, `reverted ${result.watch.candidateId}`)
+            }
           }
         }
         return result

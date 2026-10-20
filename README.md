@@ -28,6 +28,8 @@ English | [日本語](README.ja.md)
 
 **It learns without being asked.** Every finished turn is recorded as facts, not prose: which tools ran, in what order, what failed, whether you had to correct it. After twenty turns the log becomes a memory digest. After three clean repetitions of the same procedure, that procedure becomes a skill. The digest and the skill list are injected into the prompt as a small index, so the agent knows what it has learned without carrying the whole store.
 
+What it does is visible: a distilled skill, an applied change, and a revert each post one collapsed notice into the session. You do not have to read the journal to know the loop touched something.
+
 **It changes the harness only when a contrast says it should.** A prompt section, a skill directory, a tool toggle: those are rows in a plugin list, so a candidate harness is a diff against the current one. The plugin runs the same task twice, once on each harness, and compares tool errors, steps, and the deterministic `verify` command you supplied. Only a passing contrast becomes a bundle.
 
 Everything it writes is a file you can read: `.dsh/self-harness/`.
@@ -130,7 +132,7 @@ Contributions welcome; read [CONTRIBUTING.md](CONTRIBUTING.md) first, because mo
 
 ## Status
 
-v0.2 ships observation, memory, skill distillation, the live prompt section, an unattended loop, and automatic apply with auto-revert for prompt-level candidates. Row-shaped candidates still go through a bundle and a human. A UI panel is the next item in [ROADMAP.md](ROADMAP.md).
+v0.2 ships observation, memory, skill distillation, the live prompt section, an unattended loop, in-session notices, and automatic apply with auto-revert for prompt-level candidates. Row-shaped candidates still go through a bundle and a human. A UI panel is the next item in [ROADMAP.md](ROADMAP.md).
 
 How a change is applied without a restart, and why that is narrower than "rewrite the harness": [docs/AUTONOMY.md](docs/AUTONOMY.md#the-shape-of-an-automatic-apply).
 

@@ -178,3 +178,68 @@ test('self_status reports autonomy and what was observed', async () => {
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('three clean turns distil a skill, register it, and say so in the session', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'self-harness-notice-'))
+  try {
+    const injected = []
+    const registered = new Map()
+    const agent = {
+      id: 's1',
+      inject: message => injected.push(message),
+      ctx: {
+        inject(_services, callback) {
+          callback({
+            systemPrompt: {
+              section: () => () => {},
+              getSectionOrder: () => 10_000,
+            },
+            skills: {
+              register: skill => {
+                registered.set(skill.name, skill)
+                return () => registered.delete(skill.name)
+              },
+            },
+          })
+          return { dispose: async () => {} }
+        },
+      },
+    }
+    const { handlers } = mount(root, { agents: { list: () => [agent], get: () => agent } })
+    const emit = handlers.get('session/event')[0]
+
+    const turn = (turnNo) => {
+      const base = Date.now()
+      const events = [
+        { type: 'turn/start', time: base, data: { turn: turnNo } },
+        { type: 'user/message', time: base + 1, data: { content: [{ type: 'text', text: 'refactor the parser' }] } },
+        { type: 'tool/call', time: base + 2, data: { callId: `c${turnNo}a`, name: 'read' } },
+        { type: 'tool/result', time: base + 3, data: { callId: `c${turnNo}a`, message: { isError: false, content: [] } } },
+        { type: 'tool/call', time: base + 4, data: { callId: `c${turnNo}b`, name: 'edit' } },
+        { type: 'tool/result', time: base + 5, data: { callId: `c${turnNo}b`, message: { isError: false, content: [] } } },
+        { type: 'assistant/message', time: base + 6, data: { usage: { inputTokens: 50, outputTokens: 5 } } },
+        { type: 'step/end', time: base + 7, data: { turn: turnNo, step: 1 } },
+        { type: 'turn/end', time: base + 8, data: { turn: turnNo, reason: 'completed' } },
+      ]
+      for (const event of events) emit({ id: 's1' }, event)
+    }
+
+    for (let at = 1; at <= 3; at += 1) {
+      turn(at)
+      // Let the fire-and-forget observation settle between turns.
+      for (let spin = 0; spin < 40 && registered.size === 0 && at === 3; spin += 1) {
+        await new Promise(resolve => setTimeout(resolve, 25))
+      }
+    }
+
+    for (let spin = 0; spin < 40 && injected.length === 0; spin += 1) {
+      await new Promise(resolve => setTimeout(resolve, 25))
+    }
+    assert.deepEqual([...registered.keys()], ['auto-read-edit'])
+    assert.equal(injected.length, 1)
+    assert.equal(injected[0].source.kind, 'self-harness')
+    assert.match(injected[0].content[0].text, /auto-read-edit/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

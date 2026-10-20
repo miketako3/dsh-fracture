@@ -150,7 +150,7 @@ Filled in as each tier lands. Until a row is marked done, treat the tier as desi
 | Live skill registration | **done** — `agent.ctx.skills.register`, reconciled when the distiller writes a file |
 | Probe-gated T2 apply | **done for prompt-only candidates** — `src/apply.ts` registers an agent-scoped section after an `improved` verdict; a row-shaped candidate is refused with the reason |
 | Watch window and auto-revert | **done** — `Autopilot.openWatch` records the baseline, `evaluateWatch` compares the turns that followed, and the plugin disposes the section on a revert |
-| Session notifications | **not wired** — the mechanism is `agent.followup` with a non-`user` source kind, which renders as a context row rather than a user request |
+| Session notifications | **done** — `src/notice.ts` injects a `self-harness` source kind with `form: 'notice'`, which renders as a collapsed context row and does not start a turn |
 | Budget accounting | **done** — `src/policy.ts` counters, consulted by `src/autoloop.ts` before a loop and enforced by `Autopilot.noteLoop` / `noteProbe` / `noteFailure` |
 | T3 authoring with handoff message | the manual loop does this; the handoff message is the tool's return text |
 | Unattended loop | **done** — `src/autoloop.ts` gates it and the 15 minute idle trigger or `self_loop` runs it; requires a repeated task and a finding above `low` |
@@ -176,6 +176,7 @@ These are the facts the implementation depends on, recorded because they are not
 - `ctx.skills.register` is first-wins per name, returns its own disposer, and bumps a registry revision that clears every provider's cache. Reconcile diffs, never register per step.
 - Registering into `agent.ctx` scopes the skill to that agent; registering on the plugin's own context makes it global.
 - A running agent's *composition* cannot be re-bound to a different preset; its *next request* is assembled fresh every step. Per-agent registration is the supported live path, and it is the one used here.
+- `agent.followup` wakes an idle agent and starts a turn; `agent.inject` does not. Notices use `inject`, so the loop never manufactures a turn of its own. A message whose `source.kind` is not `user` is projected as context, not as something the human typed, and `form: 'notice'` with a bounded `summary` collapses it to one line.
 
 ## 9. Why not full autonomy
 
