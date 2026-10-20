@@ -16,7 +16,7 @@ export interface LoopGate {
   readonly policy: PolicyConfig
   readonly state: LoopState
   readonly now: number
-  /** Whether a watch window is open; an open window blocks a new loop. */
+  /** Whether the open watch windows have reached the cap; at the cap a new loop waits. */
   readonly watching: boolean
 }
 
@@ -29,7 +29,7 @@ export function shouldAutoLoop(gate: LoopGate): Decision {
   if (!tierAllowed(gate.autonomy, 2)) {
     return { ok: false, reason: `autonomy "${gate.autonomy}" does not reach composition changes` }
   }
-  if (gate.watching) return { ok: false, reason: 'a watch window is still open' }
+  if (gate.watching) return { ok: false, reason: 'the watch cap is reached' }
   return mayStartLoop(gate.state, gate.policy, gate.now, 2)
 }
 

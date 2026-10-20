@@ -52,8 +52,8 @@ export interface PassResult {
   readonly observations: number
   readonly digested: boolean
   readonly skillsWritten: readonly string[]
-  /** Set when a watch window closed during this pass. */
-  readonly watch?: WatchOutcome
+  /** Set when watch windows closed during this pass. */
+  readonly watches?: readonly WatchOutcome[]
 }
 
 /** The result of judging an applied change. */
@@ -147,9 +147,9 @@ export class Autopilot {
     const skillsWritten = await this.#distill()
 
     await this.#refresh()
-    const watch = await this.evaluateWatch()
+    const watches = await this.evaluateWatches()
     await this.#save()
-    return { observations: fresh.length, digested, skillsWritten, ...(watch === undefined ? {} : { watch }) }
+    return { observations: fresh.length, digested, skillsWritten, ...(watches.length === 0 ? {} : { watches }) }
   }
 
   /** Force a digest rewrite, for the manual tool and for session close. */
@@ -187,9 +187,9 @@ export class Autopilot {
     await this.#save()
   }
 
-  /** The change currently being watched, if any. */
-  get watch(): Watch | undefined {
-    return this.#progress.state.watch
+  /** The changes currently being watched, oldest first. */
+  get watches(): readonly Watch[] {
+    return this.#progress.state.watches ?? []
   }
 
   /**
@@ -214,26 +214,32 @@ export class Autopilot {
     }
     await this.#save()
     await journal(this.#store, `watching ${candidateId} until turn ${String(turns + watchTurns)} (baseline failure rate ${(baseline.failureRate * 100).toFixed(1)}%)`)
-    return this.#progress.state.watch as Watch
+    return this.#progress.state.watches?.find(watch => watch.candidateId === candidateId) as Watch
   }
 
   /**
-   * Judge the open window against the turns observed since it opened.
-   * @returns the outcome, or undefined when there is no window or it is not due yet.
+   * Judge every window that has come due against the turns since it opened.
+   * @returns one outcome per closed window, oldest first; empty when nothing is due.
    */
-  async evaluateWatch(): Promise<WatchOutcome | undefined> {
-    const watch = this.#progress.state.watch
-    if (watch === undefined) return undefined
-    if (this.#progress.state.turns < watch.dueAtTurn) return undefined
+  async evaluateWatches(): Promise<WatchOutcome[]> {
+    const due = (this.#progress.state.watches ?? []).filter(watch => this.#progress.state.turns >= watch.dueAtTurn)
+    if (due.length === 0) return []
 
     const observations = await readObservations(this.#store, 200)
-    const since = observations.filter(observation => observation.at >= watch.appliedAtIso)
-    const current = metricsFrom(since.length === 0 ? observations : since, watch.baseline.promptTokens)
-    const decision = evaluateWatch(watch.baseline, current)
-    this.#progress = { ...this.#progress, state: closeWatch(this.#progress.state, decision.revert) }
+    const outcomes: WatchOutcome[] = []
+    for (const watch of due) {
+      const since = observations.filter(observation => observation.at >= watch.appliedAtIso)
+      const current = metricsFrom(since.length === 0 ? observations : since, watch.baseline.promptTokens)
+      const decision = evaluateWatch(watch.baseline, current)
+      this.#progress = {
+        ...this.#progress,
+        state: closeWatch(this.#progress.state, watch.candidateId, decision.revert),
+      }
+      await journal(this.#store, `${decision.revert ? 'reverting' : 'keeping'} ${watch.candidateId}: ${decision.reason}`)
+      outcomes.push({ candidateId: watch.candidateId, revert: decision.revert, reason: decision.reason })
+    }
     await this.#save()
-    await journal(this.#store, `${decision.revert ? 'reverting' : 'keeping'} ${watch.candidateId}: ${decision.reason}`)
-    return { candidateId: watch.candidateId, revert: decision.revert, reason: decision.reason }
+    return outcomes
   }
 
   /** Rewrite the digest from observations. Deterministic, so it is safe to call often. */

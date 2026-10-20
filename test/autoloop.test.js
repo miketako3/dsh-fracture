@@ -28,8 +28,8 @@ test('memory and skills autonomy do not start a composition loop', () => {
   assert.match(shouldAutoLoop(gate({ autonomy: 'off' })).reason, /does not reach/)
 })
 
-test('an open watch blocks a new loop', () => {
-  assert.match(shouldAutoLoop(gate({ watching: true })).reason, /watch window is still open/)
+test('a full watch set blocks a new loop', () => {
+  assert.match(shouldAutoLoop(gate({ watching: true })).reason, /watch cap is reached/)
 })
 
 test('budget, cooldown, and failure counters all reach the gate', () => {
@@ -39,7 +39,7 @@ test('budget, cooldown, and failure counters all reach the gate', () => {
 })
 
 test('two reverts park the loop until a clean window', () => {
-  const parked = closeWatch(closeWatch({ ...EMPTY_STATE, turns: 20 }, true), true)
+  const parked = closeWatch(closeWatch({ ...EMPTY_STATE, turns: 20 }, 'a', true), 'b', true)
   assert.match(shouldAutoLoop(gate({ state: parked })).reason, /two consecutive reverts/)
 })
 
@@ -48,14 +48,24 @@ test('a single recent loop keeps the next one waiting', () => {
   assert.equal(shouldAutoLoop(gate({ state })).ok, false)
 })
 
-test('a watch that is open in state is not the same as watching', () => {
-  const state = openWatch({ ...EMPTY_STATE, turns: 20 }, {
+test('a full set of windows in state blocks even when the caller forgets the flag', () => {
+  let state = { ...EMPTY_STATE, turns: 20 }
+  for (const id of ['a', 'b', 'c']) {
+    state = openWatch(state, {
+      candidateId: id, appliedAtTurn: 20, appliedAtIso: '2026-10-20T03:00:00.000Z',
+      baseline: { failureRate: 0, meanSteps: 1, promptTokens: 10 }, dueAtTurn: 32,
+    })
+  }
+  // The stored windows are authoritative, so a caller that forgets the flag still
+  // cannot start another loop on top of unjudged changes.
+  assert.match(shouldAutoLoop(gate({ state })).reason, /already watching 3 changes/)
+
+  // One window open is not a reason to stop: stacking is the point.
+  const single = openWatch({ ...EMPTY_STATE, turns: 20 }, {
     candidateId: 'c', appliedAtTurn: 20, appliedAtIso: '2026-10-20T03:00:00.000Z',
     baseline: { failureRate: 0, meanSteps: 1, promptTokens: 10 }, dueAtTurn: 32,
   })
-  // The stored window is authoritative, so a caller that forgets the flag still
-  // cannot start a second loop on top of an unjudged change.
-  assert.match(shouldAutoLoop(gate({ state })).reason, /watching c until turn 32/)
+  assert.equal(shouldAutoLoop(gate({ state: single })).ok, true)
 })
 
 test('the most repeated task is chosen', () => {

@@ -111,7 +111,7 @@ test('a watch opens, is judged, and can revert', async () => {
     const watch = await pilot.openWatch('cand-1', { failureRate: 0, meanSteps: 2, promptTokens: 100 }, 2)
     assert.equal(watch.candidateId, 'cand-1')
     assert.equal(watch.dueAtTurn, watch.appliedAtTurn + 2)
-    assert.equal(pilot.watch?.candidateId, 'cand-1')
+    assert.equal(pilot.watches[0]?.candidateId, 'cand-1')
 
     const events = (turn) => {
       clock += 1_000
@@ -128,12 +128,12 @@ test('a watch opens, is judged, and can revert', async () => {
     }
 
     const first = await pilot.observe('s1', events(1))
-    assert.equal(first.watch, undefined)
+    assert.equal(first.watches, undefined)
     const second = await pilot.observe('s1', events(2))
-    assert.equal(second.watch?.candidateId, 'cand-1')
-    assert.equal(second.watch?.revert, true)
-    assert.match(second.watch?.reason ?? '', /tool failure rate rose/)
-    assert.equal(pilot.watch, undefined)
+    assert.equal(second.watches?.[0]?.candidateId, 'cand-1')
+    assert.equal(second.watches?.[0]?.revert, true)
+    assert.match(second.watches?.[0]?.reason ?? '', /tool failure rate rose/)
+    assert.equal(pilot.watches.length, 0)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -160,8 +160,8 @@ test('a clean watch closes without reverting', async () => {
       { type: 'turn/end', time: base + 6, data: { turn, reason: 'completed' } },
     ]
     const result = await pilot.observe('s1', events(1))
-    assert.equal(result.watch?.revert, false)
-    assert.match(result.watch?.reason ?? '', /no metric crossed/)
+    assert.equal(result.watches?.[0]?.revert, false)
+    assert.match(result.watches?.[0]?.reason ?? '', /no metric crossed/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -177,7 +177,42 @@ test('the watch survives a restart', async () => {
 
     const second = new Autopilot(store, {}, () => Date.UTC(2026, 9, 20, 3, 1, 0))
     await second.load()
-    assert.equal(second.watch?.candidateId, 'cand-3')
+    assert.equal(second.watches[0]?.candidateId, 'cand-3')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('two stacked windows are judged on their own baselines', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'fracture-watch4-'))
+  try {
+    const store = new Store(root)
+    await store.ensure()
+    let clock = Date.UTC(2026, 9, 20, 3, 0, 0)
+    const pilot = new Autopilot(store, { digestEvery: 1_000 }, () => clock)
+
+    await pilot.openWatch('clean', { failureRate: 0, meanSteps: 2, promptTokens: 100 }, 1)
+    await pilot.openWatch('dirty', { failureRate: 0, meanSteps: 2, promptTokens: 100 }, 1)
+    assert.deepEqual(pilot.watches.map(watch => watch.candidateId), ['clean', 'dirty'])
+
+    clock += 1_000
+    const turn = (index, failing) => {
+      const base = clock + index * 100
+      return [
+        { type: 'turn/start', time: base, data: { turn: index } },
+        { type: 'user/message', time: base + 1, data: { content: [{ type: 'text', text: 'task' }] } },
+        { type: 'tool/call', time: base + 2, data: { callId: 'c', name: 'edit' } },
+        { type: 'tool/result', time: base + 3, data: { callId: 'c', message: { isError: failing, content: [] }, ...(failing ? { error: { code: 'E_TOOL' } } : {}) } },
+        { type: 'assistant/message', time: base + 4, data: { usage: { inputTokens: 100, outputTokens: 5 } } },
+        { type: 'step/end', time: base + 5, data: { turn: index, step: 1 } },
+        { type: 'turn/end', time: base + 6, data: { turn: index, reason: 'completed' } },
+      ]
+    }
+
+    const result = await pilot.observe('s1', turn(1, true))
+    assert.equal(result.watches?.length, 2)
+    assert.deepEqual(result.watches?.map(watch => [watch.candidateId, watch.revert]), [['clean', true], ['dirty', true]])
+    assert.equal(pilot.watches.length, 0)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

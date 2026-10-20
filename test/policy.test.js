@@ -66,14 +66,24 @@ test('off and a lower autonomy level refuse by reason', () => {
   assert.equal(mayStartLoop(state, { ...DEFAULT_POLICY, autonomy: 'skills' }, NOW, 1).ok, true)
 })
 
-test('an open watch window blocks the next loop', () => {
-  const state = openWatch({ ...EMPTY_STATE, turns: 50 }, {
-    candidateId: 'c1',
-    appliedAtTurn: 50,
-    baseline: metrics(),
-    dueAtTurn: 62,
-  })
-  assert.match(mayStartLoop(state, DEFAULT_POLICY, NOW, 2).reason, /watching c1 until turn 62/)
+test('a full set of watch windows blocks the next loop, and one fewer does not', () => {
+  let state = { ...EMPTY_STATE, turns: 50 }
+  for (const id of ['c1', 'c2', 'c3']) {
+    state = openWatch(state, { candidateId: id, appliedAtTurn: 50, baseline: metrics(), dueAtTurn: 62 })
+  }
+  assert.match(mayStartLoop(state, DEFAULT_POLICY, NOW, 2).reason, /already watching 3 changes \(c1 until turn 62, c2 until turn 62, c3 until turn 62\)/)
+  assert.equal(mayStartLoop(state, { ...DEFAULT_POLICY, maxWatches: 4 }, NOW, 2).ok, true)
+})
+
+test('stacking drops the oldest window once the cap is reached', () => {
+  let state = { ...EMPTY_STATE, turns: 50 }
+  for (const id of ['c1', 'c2']) {
+    state = openWatch(state, { candidateId: id, appliedAtTurn: 50, baseline: metrics(), dueAtTurn: 62 }, 2)
+  }
+  const names = () => (state.watches ?? []).map(watch => watch.candidateId)
+  assert.deepEqual(names(), ['c1', 'c2'])
+  state = openWatch(state, { candidateId: 'c3', appliedAtTurn: 50, baseline: metrics(), dueAtTurn: 62 }, 2)
+  assert.deepEqual(names(), ['c2', 'c3'])
 })
 
 test('two internal failures park the loop', () => {
@@ -86,11 +96,14 @@ test('two internal failures park the loop', () => {
 })
 
 test('two reverts park only composition changes', () => {
-  const state = closeWatch(closeWatch({ ...EMPTY_STATE, turns: 50 }, true), true)
+  let opened = { ...EMPTY_STATE, turns: 50 }
+  opened = openWatch(opened, { candidateId: 'a', appliedAtTurn: 50, baseline: metrics(), dueAtTurn: 62 })
+  opened = openWatch(opened, { candidateId: 'b', appliedAtTurn: 50, baseline: metrics(), dueAtTurn: 62 })
+  const state = closeWatch(closeWatch(opened, 'a', true), 'b', true)
   assert.equal(state.revertsInARow, 2)
   assert.match(mayStartLoop(state, DEFAULT_POLICY, NOW, 2).reason, /two consecutive reverts/)
   assert.equal(mayStartLoop(state, DEFAULT_POLICY, NOW, 1).ok, true)
-  assert.equal(mayStartLoop(closeWatch(state, false), DEFAULT_POLICY, NOW, 2).ok, true)
+  assert.equal(mayStartLoop(closeWatch(state, 'a', false), DEFAULT_POLICY, NOW, 2).ok, true)
 })
 
 test('the probe budget is separate from the loop budget', () => {
@@ -126,7 +139,7 @@ test('prompt growth beyond fifteen percent reverts', () => {
 })
 
 test('a clean window closes without touching the revert counter', () => {
-  const state = closeWatch({ ...EMPTY_STATE, watch: { candidateId: 'c', appliedAtTurn: 1, baseline: metrics(), dueAtTurn: 5, reverted: false }, revertsInARow: 1 }, false)
-  assert.equal(state.watch, undefined)
+  const state = closeWatch({ ...EMPTY_STATE, watches: [{ candidateId: 'c', appliedAtTurn: 1, baseline: metrics(), dueAtTurn: 5, reverted: false }], revertsInARow: 1 }, 'c', false)
+  assert.deepEqual(state.watches, [])
   assert.equal(state.revertsInARow, 0)
 })

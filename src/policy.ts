@@ -26,6 +26,8 @@ export interface PolicyConfig {
   readonly minTurnsBetweenLoops: number
   /** How long an applied change is watched before it is judged. */
   readonly watchTurns: number
+  /** How many applied changes may be watched at once. */
+  readonly maxWatches: number
 }
 
 /** Defaults chosen so an idle user sees at most a couple of loops an hour. */
@@ -35,6 +37,7 @@ export const DEFAULT_POLICY: PolicyConfig = {
   maxProbesPerHour: 1,
   minTurnsBetweenLoops: 8,
   watchTurns: 12,
+  maxWatches: 3,
 }
 
 /** Metrics compared across a watch window. */
@@ -67,7 +70,16 @@ export interface LoopState {
   readonly turns: number
   /** Consecutive internal failures; a self-downgrade trigger. */
   readonly failuresInARow: number
-  readonly watch?: Watch
+  /**
+   * Applied changes still inside their windows, oldest first.
+   *
+   * A window is a comparison against the metrics of the turns before that
+   * change, so several can be open at once without sharing a baseline. What
+   * they cannot share is an attribution: if two changes overlap and the numbers
+   * move, the turn data does not say which one moved them. Stacking is therefore
+   * capped, and a revert names the change it removed.
+   */
+  readonly watches?: readonly Watch[]
   /** Consecutive reverts; two disable composition changes for the session. */
   readonly revertsInARow: number
 }
@@ -125,7 +137,11 @@ export function mayStartLoop(state: LoopState, config: PolicyConfig, now: number
   if (config.autonomy === 'off') return { ok: false, reason: 'autonomy is off' }
   if (!tierAllowed(config.autonomy, tier)) return { ok: false, reason: `autonomy "${config.autonomy}" does not reach tier ${String(tier)}` }
   if (state.failuresInARow >= 2) return { ok: false, reason: 'two internal failures in a row; downgraded until a manual run succeeds' }
-  if (state.watch !== undefined) return { ok: false, reason: `watching ${state.watch.candidateId} until turn ${String(state.watch.dueAtTurn)}` }
+  const watches = state.watches ?? []
+  if (watches.length >= config.maxWatches) {
+    const names = watches.map(watch => `${watch.candidateId} until turn ${String(watch.dueAtTurn)}`)
+    return { ok: false, reason: `already watching ${String(watches.length)} changes (${names.join(', ')})` }
+  }
   if (tier >= 2 && state.revertsInARow >= 2) return { ok: false, reason: 'two consecutive reverts; composition changes are parked' }
 
   const loops = state.loopStarts.filter(at => at > hourAgo(now))
@@ -210,16 +226,29 @@ export function recordProbe(state: LoopState, now: number): LoopState {
   return { ...state, probeStarts: [...state.probeStarts.filter(at => at > hourAgo(now)), now] }
 }
 
-/** Open a watch window after an apply. */
-export function openWatch(state: LoopState, watch: Omit<Watch, 'reverted'>): LoopState {
-  return { ...state, watch: { ...watch, reverted: false } }
+/**
+ * Open a watch window after an apply.
+ * @param state - current loop state.
+ * @param watch - the window to open.
+ * @param max - how many windows may be open at once; the oldest is dropped.
+ * @returns the state with the window appended.
+ */
+export function openWatch(state: LoopState, watch: Omit<Watch, 'reverted'>, max = DEFAULT_POLICY.maxWatches): LoopState {
+  const open = [...(state.watches ?? []), { ...watch, reverted: false }]
+  return { ...state, watches: open.slice(Math.max(0, open.length - max)) }
 }
 
-/** Close the window and fold the outcome into the reliability counters. */
-export function closeWatch(state: LoopState, reverted: boolean): LoopState {
-  const { watch: _closed, ...rest } = state
+/**
+ * Close one window and fold the outcome into the reliability counters.
+ * @param state - current loop state.
+ * @param candidateId - the change whose window is closing.
+ * @param reverted - whether the change was taken back.
+ * @returns the state with that window removed.
+ */
+export function closeWatch(state: LoopState, candidateId: string, reverted: boolean): LoopState {
   return {
-    ...rest,
+    ...state,
+    watches: (state.watches ?? []).filter(watch => watch.candidateId !== candidateId),
     revertsInARow: reverted ? state.revertsInARow + 1 : 0,
     failuresInARow: 0,
   }

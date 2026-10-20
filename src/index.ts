@@ -70,9 +70,10 @@ export interface Config {
   distillMinRepeats: number
   /** Apply a prompt-only candidate to the live agent when its probe says improved. */
   autoApply: boolean
-  /** Turns watched after an automatic apply before it is kept or reverted.
-   */
+  /** Turns watched after an automatic apply before it is kept or reverted. */
   watchTurns: number
+  /** Applied changes that may be watched at the same time. */
+  maxWatches: number
   /** Loops the idle trigger may start per rolling hour. */
   maxLoopsPerHour: number
   /** Probes the loop may run per rolling hour. */
@@ -98,6 +99,7 @@ export const Config: z<Config> = z.object({
   distillMinRepeats: z.number().default(3),
   autoApply: z.boolean().default(true),
   watchTurns: z.number().default(12),
+  maxWatches: z.number().default(3),
   maxLoopsPerHour: z.number().default(2),
   maxProbesPerHour: z.number().default(1),
   minTurnsBetweenLoops: z.number().default(8),
@@ -197,6 +199,7 @@ export function apply(ctx: Context, config: Config): void {
     maxProbesPerHour: config.maxProbesPerHour,
     minTurnsBetweenLoops: config.minTurnsBetweenLoops,
     watchTurns: config.watchTurns,
+    maxWatches: config.maxWatches,
   }
   const lifetime = new AbortController()
 
@@ -229,7 +232,11 @@ export function apply(ctx: Context, config: Config): void {
     if (!tierAllowed(config.autonomy, 2)) return `autonomy \`${config.autonomy}\` does not reach composition changes.`
     const allowed = applyability(candidate)
     if (!allowed.ok) return `not applied live: ${allowed.reason}.`
-    if (pilot.watch !== undefined) return `not applied: still watching \`${pilot.watch.candidateId}\`.`
+    if (pilot.watches.length >= config.maxWatches) {
+      const open = pilot.watches.map(watch => `\`${watch.candidateId}\``).join(', ')
+      return `not applied: already watching ${String(pilot.watches.length)} changes (${open}).`
+    }
+    if (pilot.watches.some(watch => watch.candidateId === candidate.id)) return `not applied: \`${candidate.id}\` is already being watched.`
     const override = overrideOf(candidate)
     if (override === undefined) return 'not applied live: the candidate has no prompt text.'
 
@@ -265,7 +272,7 @@ export function apply(ctx: Context, config: Config): void {
       policy,
       state: pilot.state,
       now: Date.now(),
-      watching: pilot.watch !== undefined,
+      watching: pilot.watches.length >= config.maxWatches,
     })
     if (!decision.ok) return `skipped: ${decision.reason}`
 
@@ -384,16 +391,16 @@ export function apply(ctx: Context, config: Config): void {
             )
           }
         }
-        if (result.watch?.revert === true) {
-          const applied = overrides.get(result.watch.candidateId)
-          if (applied !== undefined) {
-            overrides.delete(result.watch.candidateId)
-            await revertOverride(applied)
-            await journal(store, `reverted ${result.watch.candidateId}: ${result.watch.reason}`)
-            const agent = agentFor(id)
-            if (agent !== undefined) {
-              notify(agent, `Reverted \`${result.watch.candidateId}\`: ${result.watch.reason}.`, `reverted ${result.watch.candidateId}`)
-            }
+        for (const outcome of result.watches ?? []) {
+          if (!outcome.revert) continue
+          const applied = overrides.get(outcome.candidateId)
+          if (applied === undefined) continue
+          overrides.delete(outcome.candidateId)
+          await revertOverride(applied)
+          await journal(store, `reverted ${outcome.candidateId}: ${outcome.reason}`)
+          const agent = agentFor(id)
+          if (agent !== undefined) {
+            notify(agent, `Reverted \`${outcome.candidateId}\`: ${outcome.reason}.`, `reverted ${outcome.candidateId}`)
           }
         }
         return result
@@ -667,6 +674,7 @@ export function apply(ctx: Context, config: Config): void {
         `- turns observed: ${String(pilot.index.observations)}`,
         `- digest sections: ${pilot.index.digestHeadings.length === 0 ? 'none yet' : pilot.index.digestHeadings.join(', ')}`,
         `- distilled skills: ${String(skills.length)}`,
+        `- watching: ${pilot.watches.length === 0 ? 'nothing' : pilot.watches.map(watch => `\`${watch.candidateId}\` until turn ${String(watch.dueAtTurn)}`).join(', ')}`,
         ...latest,
         '',
         `- candidates: ${String(ids.length)}`,
