@@ -80,7 +80,7 @@
     "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.5",
     "@types/node": "^22.10.0",
-    "typescript": "^5.7.0"
+    "typescript": "^7.0.2"
   },
   "dsh": {
     "bundle": {
