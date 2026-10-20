@@ -639,6 +639,10 @@ export function apply(ctx: Context, config: Config): void {
     parameters: {},
     output: OUTPUT,
     async execute() {
+      // Re-read the store so the report reflects the disk, not the state this
+      // instance saw when it loaded. A live reload starts the plugin with an
+      // empty index even when the base directory already has a digest.
+      await pilot.load()
       const ids = await store.listCandidateIds()
       const rows: string[] = []
       for (const id of ids) {
