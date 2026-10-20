@@ -156,6 +156,11 @@ export function parseCandidate(fallbackId: string, raw: unknown): Candidate {
     if (typeof entry['name'] !== 'string' || entry['name'] === '') problems.push(`row ${String(index)} needs a string \`name\``)
   }
   if (record['verify'] !== undefined && typeof record['verify'] !== 'string') problems.push('`verify` must be a string when present')
+  if (record['prompt'] !== undefined) {
+    if (typeof record['prompt'] !== 'string') problems.push('`prompt` must be a string when present')
+    else if (record['prompt'].trim() === '') problems.push('`prompt` must not be empty when present')
+    else if (record['prompt'].length > 4_000) problems.push('`prompt` must stay under 4000 characters')
+  }
   if (problems.length > 0) throw new Error(problems.join('; '))
 
   const candidate: Candidate = {
@@ -166,6 +171,7 @@ export function parseCandidate(fallbackId: string, raw: unknown): Candidate {
     lever: lever as Lever,
     rows: rows as Candidate['rows'],
     ...(record['verify'] === undefined ? {} : { verify: record['verify'] as string }),
+    ...(record['prompt'] === undefined ? {} : { prompt: (record['prompt'] as string).trim() }),
   }
 
   const guarded = candidateProblems(candidate)

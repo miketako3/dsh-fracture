@@ -49,6 +49,8 @@ export interface Metrics {
 export interface Watch {
   readonly candidateId: string
   readonly appliedAtTurn: number
+  /** ISO time the change went live, used to select the turns that followed it. */
+  readonly appliedAtIso: string
   readonly baseline: Metrics
   readonly dueAtTurn: number
   /** A revert counts against the loop's own reliability. */

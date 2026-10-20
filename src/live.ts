@@ -74,6 +74,41 @@ export function renderIndex(index: MemoryIndex, maxSkills = 8): string {
   ].join('\n')
 }
 
+/** One extra prompt section, applied outside the memory index. */
+export interface SectionSpec {
+  readonly name: string
+  readonly order: number
+  readonly text: string
+}
+
+/** A disposable contribution. */
+export interface Mounted {
+  dispose(): Promise<void>
+}
+
+/**
+ * Add one static section to an agent's prompt.
+ *
+ * Used for a candidate addendum that is applied without a restart and removed
+ * if the watch window says the change made things worse.
+ * @param agent - the agent to extend.
+ * @param spec - section name, order, and body.
+ * @returns a handle whose dispose removes the section.
+ */
+export function installSection(agent: LiveAgent, spec: SectionSpec): Mounted {
+  const fiber = agent.ctx.inject(['systemPrompt'], scope => {
+    scope.systemPrompt.section({
+      name: spec.name,
+      order: spec.order,
+      text: () => spec.text,
+      interpolate: false,
+    })
+  })
+  return {
+    dispose: async () => { await fiber.dispose() },
+  }
+}
+
 /** Handle for one agent's live contributions. */
 export interface LiveHandle {
   /** Re-register the given skills, replacing whatever this handle registered before. */

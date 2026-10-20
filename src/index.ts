@@ -17,11 +17,16 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import z from '@deepseek-ai/schemastery'
 import { adopt, latestProbe } from './adopt.js'
+import { applyability, applyOverride, overrideOf, revertOverride } from './apply.js'
+import type { Applied } from './apply.js'
+import { metricsFrom } from './metrics.js'
 import { Autopilot } from './autopilot.js'
 import { installLive } from './live.js'
 import type { LiveAgent, LiveHandle } from './live.js'
-import { journal, searchMemory } from './memory.js'
-import type { Autonomy } from './policy.js'
+import { journal, readObservations, searchMemory } from './memory.js'
+import { DEFAULT_POLICY, tierAllowed } from './policy.js'
+import type { Autonomy, PolicyConfig } from './policy.js'
+import { pickTask, shouldAutoLoop } from './autoloop.js'
 import type { RawEvent } from './types.js'
 import { diagnose } from './diagnose.js'
 import { candidateProblems } from './guard.js'
@@ -62,6 +67,19 @@ export interface Config {
   digestEvery: number
   /** Clean repetitions before a procedure is written out as a skill. */
   distillMinRepeats: number
+  /** Apply a prompt-only candidate to the live agent when its probe says improved. */
+  autoApply: boolean
+  /** Turns watched after an automatic apply before it is kept or reverted.
+   */
+  watchTurns: number
+  /** Loops the idle trigger may start per rolling hour. */
+  maxLoopsPerHour: number
+  /** Probes the loop may run per rolling hour. */
+  maxProbesPerHour: number
+  /** Turns that must pass after a loop before the next one may start. */
+  minTurnsBetweenLoops: number
+  /** Let the idle trigger run the whole loop without being asked. */
+  autoLoop: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -77,6 +95,12 @@ export const Config: z<Config> = z.object({
   autonomy: z.union(['off', 'memory', 'skills', 'full']).default('full'),
   digestEvery: z.number().default(20),
   distillMinRepeats: z.number().default(3),
+  autoApply: z.boolean().default(true),
+  watchTurns: z.number().default(12),
+  maxLoopsPerHour: z.number().default(2),
+  maxProbesPerHour: z.number().default(1),
+  minTurnsBetweenLoops: z.number().default(8),
+  autoLoop: z.boolean().default(true),
 })
 
 const OUTPUT = {
@@ -90,6 +114,11 @@ function storeOf(config: Config): Store {
 
 /** Events retained per session, enough for a diagnosis without unbounded growth. */
 const BUFFER_LIMIT = 2_000
+
+/** The agent behind a tool call, when the caller has one. */
+function analyzedAgent(exec: ToolRunContext): Agent | undefined {
+  return exec.agent
+}
 
 function requireAgent(exec: ToolRunContext): Agent {
   if (exec.agent === undefined) throw new Error('this tool needs a live agent; call it from a session, not from a nested dispatcher')
@@ -160,6 +189,15 @@ export function apply(ctx: Context, config: Config): void {
   const pilot = new Autopilot(store, { digestEvery: config.digestEvery, distillMinRepeats: config.distillMinRepeats })
   const buffers = new Map<string, RawEvent[]>()
   const live = new Map<unknown, LiveHandle>()
+  const overrides = new Map<string, Applied>()
+  const policy: PolicyConfig = {
+    autonomy: config.autonomy,
+    maxLoopsPerHour: config.maxLoopsPerHour,
+    maxProbesPerHour: config.maxProbesPerHour,
+    minTurnsBetweenLoops: config.minTurnsBetweenLoops,
+    watchTurns: config.watchTurns,
+  }
+  const lifetime = new AbortController()
 
   const skillsFor = () => pilot.skills.map(skill => ({
     name: skill.name,
@@ -176,6 +214,117 @@ export function apply(ctx: Context, config: Config): void {
       live.set(agent, handle)
     } catch (error) {
       void journal(store, `could not extend an agent: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * Put a prompt-only candidate live on one agent and start watching it.
+   * @param agent - the agent whose prompt changes.
+   * @param candidate - a candidate that passed its probe.
+   * @returns a line describing what happened, for the tool result.
+   */
+  const autoApplyCandidate = async (agent: unknown, candidate: Candidate): Promise<string> => {
+    if (!config.autoApply) return 'auto-apply is off; the candidate stays a bundle.'
+    if (!tierAllowed(config.autonomy, 2)) return `autonomy \`${config.autonomy}\` does not reach composition changes.`
+    const allowed = applyability(candidate)
+    if (!allowed.ok) return `not applied live: ${allowed.reason}.`
+    if (pilot.watch !== undefined) return `not applied: still watching \`${pilot.watch.candidateId}\`.`
+    const override = overrideOf(candidate)
+    if (override === undefined) return 'not applied live: the candidate has no prompt text.'
+
+    try {
+      overrides.set(candidate.id, applyOverride(agent as LiveAgent, override))
+      const recent = await readObservations(store, config.watchTurns)
+      await pilot.openWatch(candidate.id, metricsFrom(recent), config.watchTurns)
+      await journal(store, `applied ${candidate.id} to a live agent; watching ${String(config.watchTurns)} turns`)
+      return `applied live as section \`${override.sectionName}\`; watching ${String(config.watchTurns)} turns.`
+    } catch (error) {
+      await journal(store, `apply of ${candidate.id} failed: ${error instanceof Error ? error.message : String(error)}`)
+      return `applying live failed: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+
+  /**
+   * Run the whole loop without being asked: diagnose, propose, probe, apply.
+   * @param agent - the agent whose harness may change.
+   * @param task - optional task override; otherwise the most repeated task is used.
+   * @returns a one-line account of what happened.
+   */
+  const runAutoLoop = async (agent: Agent, task?: string): Promise<string> => {
+    const decision = shouldAutoLoop({
+      autonomy: config.autonomy,
+      policy,
+      state: pilot.state,
+      now: Date.now(),
+      watching: pilot.watch !== undefined,
+    })
+    if (!decision.ok) return `skipped: ${decision.reason}`
+
+    await pilot.noteLoop(Date.now())
+    try {
+      const slices = await loadSessions(ctx, config.maxSessions, lifetime.signal)
+      if (slices.length === 0) {
+        await pilot.noteSuccess()
+        return 'skipped: no stored session could be read'
+      }
+      const diagnosis = diagnose(slices.map(slice => slice.events))
+      const strongest = diagnosis.findings.find(item => item.severity !== 'low')
+      if (strongest === undefined) {
+        await pilot.noteSuccess()
+        await journal(store, 'auto loop: nothing crossed a threshold')
+        return 'skipped: nothing crossed a threshold'
+      }
+      const chosen = task ?? pickTask(await readObservations(store, 60))
+      if (chosen === undefined) {
+        await pilot.noteSuccess()
+        return 'skipped: no task repeated enough times to be worth a probe'
+      }
+
+      const proposal = await propose({
+        ctx,
+        store,
+        settings: { provider: config.provider, timeoutMs: config.timeoutMs },
+        agent,
+        diagnosis,
+        task: chosen,
+        cwd: process.cwd(),
+        signal: lifetime.signal,
+        finding: strongest.id,
+      })
+      const candidate = proposal.accepted[0]
+      if (candidate === undefined) {
+        await pilot.noteSuccess()
+        await journal(store, `auto loop: proposer wrote no acceptable candidate for ${strongest.id}`)
+        return `skipped: no acceptable candidate for ${strongest.id}`
+      }
+
+      await pilot.noteProbe(Date.now())
+      const result = await runProbe({
+        ctx,
+        store,
+        settings: {
+          provider: config.provider,
+          dshCommand: config.dshCommand,
+          profile: config.profile,
+          timeoutMs: config.timeoutMs,
+          isolate: config.isolate,
+        },
+        candidate,
+        task: chosen,
+        cwd: process.cwd(),
+        agent,
+        signal: lifetime.signal,
+      })
+      await pilot.noteSuccess()
+      await journal(store, `auto loop: ${candidate.id} probed ${result.verdict} on "${chosen}"`)
+      if (result.verdict !== 'improved') return `probed ${candidate.id}: ${result.verdict}, not applied`
+      const applied = await autoApplyCandidate(agent, candidate)
+      return `probed ${candidate.id}: improved. ${applied}`
+    } catch (error) {
+      await pilot.noteFailure()
+      const message = error instanceof Error ? error.message : String(error)
+      await journal(store, `auto loop failed: ${message}`)
+      return `failed: ${message}`
     }
   }
 
@@ -210,9 +359,17 @@ export function apply(ctx: Context, config: Config): void {
       if (buffer.length > BUFFER_LIMIT) buffer.splice(0, buffer.length - BUFFER_LIMIT)
       buffers.set(id, buffer)
       if (event.type !== 'turn/end') return
-      void pilot.observe(id, buffer).then(result => {
+      void pilot.observe(id, buffer).then(async result => {
         if (result.skillsWritten.length > 0) {
           for (const handle of live.values()) handle.reconcile(skillsFor())
+        }
+        if (result.watch?.revert === true) {
+          const applied = overrides.get(result.watch.candidateId)
+          if (applied !== undefined) {
+            overrides.delete(result.watch.candidateId)
+            await revertOverride(applied)
+            await journal(store, `reverted ${result.watch.candidateId}: ${result.watch.reason}`)
+          }
         }
         return result
       }).catch((error: unknown) => {
@@ -224,10 +381,19 @@ export function apply(ctx: Context, config: Config): void {
       const timer = setInterval(() => {
         attachAll()
         void pilot.refreshDigest().catch(() => undefined)
+        if (!config.autoLoop) return
+        const agent = agents?.list()[0]
+        if (agent === undefined) return
+        void runAutoLoop(agent as Agent).then(line => {
+          if (!line.startsWith('skipped')) void journal(store, `auto loop: ${line}`)
+        })
       }, 15 * 60_000)
       timer.unref()
-      return () => { clearInterval(timer) }
-    }, 'self-harness: idle refresh')
+      return () => {
+        clearInterval(timer)
+        lifetime.abort(new Error('self-harness is unloading'))
+      }
+    }, 'self-harness: idle loop')
   }
 
   ctx.tools.register(defineTool({
@@ -346,7 +512,10 @@ export function apply(ctx: Context, config: Config): void {
         agent,
         signal: exec.signal,
       })
-      return renderProbe(result, store)
+      const applied = result.verdict === 'improved'
+        ? await autoApplyCandidate(analyzedAgent(exec), candidate)
+        : 'not applied: the probe did not come back improved.'
+      return `${renderProbe(result, store)}\n\n## Live apply\n\n${applied}`
     },
   }))
 
@@ -397,6 +566,24 @@ export function apply(ctx: Context, config: Config): void {
         '',
         `Lesson appended to \`${store.lessonsPath}\`.`,
       ].join('\n')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'self_loop',
+    description: [
+      'Run the whole loop once without further prompting: diagnose, propose, probe, and apply a prompt-level',
+      'candidate if the contrast comes back improved.',
+      'Refuses when a watch window is open, the hourly budget is spent, or nothing crossed a threshold.',
+      'The idle trigger runs the same path every 15 minutes.',
+    ].join(' '),
+    parameters: {
+      task: { type: 'string', description: 'Task to improve the harness for. Defaults to the most repeated task in memory.' },
+    },
+    output: OUTPUT,
+    async execute(args, exec) {
+      const agent = requireAgent(exec)
+      return runAutoLoop(agent, args.task)
     },
   }))
 

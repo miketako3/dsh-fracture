@@ -27,6 +27,13 @@ export interface Candidate {
   readonly rows: readonly PresetRow[]
   /** Optional deterministic check run in both probe workspaces. */
   readonly verify?: string
+  /**
+   * Prompt text the loop may apply to a running agent without a restart.
+   *
+   * Only prompt-level additions qualify: the loop cannot re-bind a live agent's
+   * preset, so a row that is not a plain text addition has to be installed.
+   */
+  readonly prompt?: string
 }
 
 /** A single observed step of a probe run. */

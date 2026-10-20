@@ -17,8 +17,9 @@ import { appendObservations, countObservations, journal, memoryIndex, readObserv
 import type { MemoryIndex } from './memory.js'
 import { DEFAULT_DISTILL, listSkills, renderSkill, skillCandidates, writeSkill } from './skills.js'
 import type { StoredSkill } from './skills.js'
-import { EMPTY_STATE, recordTurn } from './policy.js'
-import type { LoopState } from './policy.js'
+import { EMPTY_STATE, closeWatch, evaluateWatch, openWatch, recordFailure, recordLoop, recordProbe, recordSuccess, recordTurn } from './policy.js'
+import type { LoopState, Metrics, Watch } from './policy.js'
+import { metricsFrom } from './metrics.js'
 import type { RawEvent } from './types.js'
 
 /** Tuning for the automatic tiers. */
@@ -51,6 +52,15 @@ export interface PassResult {
   readonly observations: number
   readonly digested: boolean
   readonly skillsWritten: readonly string[]
+  /** Set when a watch window closed during this pass. */
+  readonly watch?: WatchOutcome
+}
+
+/** The result of judging an applied change. */
+export interface WatchOutcome {
+  readonly candidateId: string
+  readonly revert: boolean
+  readonly reason: string
 }
 
 const NOTHING: PassResult = { observations: 0, digested: false, skillsWritten: [] }
@@ -137,8 +147,9 @@ export class Autopilot {
     const skillsWritten = await this.#distill()
 
     await this.#refresh()
+    const watch = await this.evaluateWatch()
     await this.#save()
-    return { observations: fresh.length, digested, skillsWritten }
+    return { observations: fresh.length, digested, skillsWritten, ...(watch === undefined ? {} : { watch }) }
   }
 
   /** Force a digest rewrite, for the manual tool and for session close. */
@@ -146,6 +157,83 @@ export class Autopilot {
     if (!this.#loaded) await this.load()
     await this.#writeDigest()
     await this.#refresh()
+  }
+
+  /** Record that a loop started, so the cooldown and the hourly budget apply. */
+  async noteLoop(now: number): Promise<void> {
+    if (!this.#loaded) await this.load()
+    this.#progress = { ...this.#progress, state: recordLoop(this.#progress.state, now, this.#progress.state.turns) }
+    await this.#save()
+  }
+
+  /** Record that a probe started. */
+  async noteProbe(now: number): Promise<void> {
+    if (!this.#loaded) await this.load()
+    this.#progress = { ...this.#progress, state: recordProbe(this.#progress.state, now) }
+    await this.#save()
+  }
+
+  /** Count an internal failure; two in a row stop the loop until a clean run. */
+  async noteFailure(): Promise<void> {
+    if (!this.#loaded) await this.load()
+    this.#progress = { ...this.#progress, state: recordFailure(this.#progress.state) }
+    await this.#save()
+  }
+
+  /** Clear the failure counter after a loop that finished cleanly. */
+  async noteSuccess(): Promise<void> {
+    if (!this.#loaded) await this.load()
+    this.#progress = { ...this.#progress, state: recordSuccess(this.#progress.state) }
+    await this.#save()
+  }
+
+  /** The change currently being watched, if any. */
+  get watch(): Watch | undefined {
+    return this.#progress.state.watch
+  }
+
+  /**
+   * Open a watch window for a change that was just applied.
+   * @param candidateId - the applied candidate.
+   * @param baseline - metrics of the turns immediately before the change.
+   * @param watchTurns - how many turns to watch.
+   * @returns the recorded window.
+   */
+  async openWatch(candidateId: string, baseline: Metrics, watchTurns: number): Promise<Watch> {
+    if (!this.#loaded) await this.load()
+    const turns = this.#progress.state.turns
+    this.#progress = {
+      ...this.#progress,
+      state: openWatch(this.#progress.state, {
+        candidateId,
+        appliedAtTurn: turns,
+        appliedAtIso: new Date(this.#now()).toISOString(),
+        baseline,
+        dueAtTurn: turns + watchTurns,
+      }),
+    }
+    await this.#save()
+    await journal(this.#store, `watching ${candidateId} until turn ${String(turns + watchTurns)} (baseline failure rate ${(baseline.failureRate * 100).toFixed(1)}%)`)
+    return this.#progress.state.watch as Watch
+  }
+
+  /**
+   * Judge the open window against the turns observed since it opened.
+   * @returns the outcome, or undefined when there is no window or it is not due yet.
+   */
+  async evaluateWatch(): Promise<WatchOutcome | undefined> {
+    const watch = this.#progress.state.watch
+    if (watch === undefined) return undefined
+    if (this.#progress.state.turns < watch.dueAtTurn) return undefined
+
+    const observations = await readObservations(this.#store, 200)
+    const since = observations.filter(observation => observation.at >= watch.appliedAtIso)
+    const current = metricsFrom(since.length === 0 ? observations : since, watch.baseline.promptTokens)
+    const decision = evaluateWatch(watch.baseline, current)
+    this.#progress = { ...this.#progress, state: closeWatch(this.#progress.state, decision.revert) }
+    await this.#save()
+    await journal(this.#store, `${decision.revert ? 'reverting' : 'keeping'} ${watch.candidateId}: ${decision.reason}`)
+    return { candidateId: watch.candidateId, revert: decision.revert, reason: decision.reason }
   }
 
   /** Rewrite the digest from observations. Deterministic, so it is safe to call often. */

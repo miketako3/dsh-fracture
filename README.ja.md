@@ -65,6 +65,9 @@ dsh plugin --profile web add dsh-self-harness
     baseDir: .dsh/self-harness
     digestEvery: 20       # ダイジェストを書き直すまでのターン数
     distillMinRepeats: 3  # スキルにするまでの連続成功回数
+    autoLoop: true        # 15 分間隔の自走を許す
+    autoApply: true       # 試行で改善したプロンプト候補を適用する
+    watchTurns: 12        # 適用した変更を監視するターン数
 ```
 
 ## ツール
@@ -80,6 +83,7 @@ dsh plugin --profile web add dsh-self-harness
 | `self_adopt` | 試行済みの候補をバンドルにし、教訓を追記する。導入はしない。 |
 | `self_status` | 何を学び、何を提案し、各候補がどう評価されたかを出す。 |
 | `memory_search` | ダイジェスト、過去のターン、スキルを検索する。 |
+| `self_loop` | 診断から適用までを一度だけ回す。15 分間隔の自走と同じ関門を通る。 |
 
 ## この形にした理由
 
@@ -134,9 +138,9 @@ npm run build
 
 ## 状態
 
-v0.2 を進行中。
-観察、記憶、スキルの蒸留、走っているエージェントへのプロンプト節の追加はこの版で入る。
-試行を経た構成の自動適用と UI パネルは [ROADMAP.md](ROADMAP.md) の次の二項目である。
+v0.2 で、観察、記憶、スキルの蒸留、走っているエージェントへのプロンプト節の追加、自走ループ、プロンプト候補の自動適用と自動巻き戻しが入る。
+行を持つ候補は従来どおりバンドルにして人間が導入する。
+UI パネルは [ROADMAP.md](ROADMAP.md) の次の項目である。
 
 ## ライセンス
 

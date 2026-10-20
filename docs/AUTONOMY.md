@@ -4,7 +4,7 @@ v0.1 shipped a toolkit: the model calls `self_diagnose`, `self_propose`, `self_p
 
 This document defines the next shape: a plugin that **runs by itself** — accumulating memory, distilling skills, and changing the harness without being asked — and the boundaries that keep that autonomy from being a liability.
 
-Status: tiers 0 and 1 are implemented and wired to `session/event` and `agent/created`. Tier 2 is designed and not wired; tier 3 exists as the manual loop only. Section 8 is the source of truth.
+Status: tiers 0, 1, and the prompt part of tier 2 are implemented. Tier 2 is limited to candidates carrying `prompt` text, because a running agent's preset cannot be re-bound. Tier 3 exists as the manual loop plus the automatic authoring note. Section 8 is the source of truth.
 
 ## 1. The problem with "just run the loop on a timer"
 
@@ -148,11 +148,24 @@ Filled in as each tier lands. Until a row is marked done, treat the tier as desi
 | Memory index section and search tool | **done** — dynamic `systemPrompt.section` (order 9900, `interpolate: false`) plus the `memory_search` tool |
 | Skill distiller | **done** — three clean repetitions of a two-step procedure; hand-written skills are never overwritten |
 | Live skill registration | **done** — `agent.ctx.skills.register`, reconciled when the distiller writes a file |
-| Probe-gated T2 apply | policy implemented in `src/policy.ts`; apply is not wired |
-| Watch window and auto-revert | decision function implemented in `src/policy.ts`; no caller yet |
+| Probe-gated T2 apply | **done for prompt-only candidates** — `src/apply.ts` registers an agent-scoped section after an `improved` verdict; a row-shaped candidate is refused with the reason |
+| Watch window and auto-revert | **done** — `Autopilot.openWatch` records the baseline, `evaluateWatch` compares the turns that followed, and the plugin disposes the section on a revert |
 | Session notifications | **not wired** — the mechanism is `agent.followup` with a non-`user` source kind, which renders as a context row rather than a user request |
-| Budget accounting | `src/policy.ts` implements the counters and decisions; `Autopilot` does not consult them yet |
+| Budget accounting | **done** — `src/policy.ts` counters, consulted by `src/autoloop.ts` before a loop and enforced by `Autopilot.noteLoop` / `noteProbe` / `noteFailure` |
 | T3 authoring with handoff message | the manual loop does this; the handoff message is the tool's return text |
+| Unattended loop | **done** — `src/autoloop.ts` gates it and the 15 minute idle trigger or `self_loop` runs it; requires a repeated task and a finding above `low` |
+
+### The shape of an automatic apply
+
+A row cannot be inserted into a running agent, so the automatic path is narrower than the design first assumed:
+
+1. The candidate must carry `prompt` text and no rows. `applyability()` returns the reason when it does not.
+2. The text becomes a section named `self-harness:candidate:<id>` at order 9950, above the memory index, below the tool descriptions.
+3. The watch window opens with the metrics of the last `watchTurns` turns as its baseline.
+4. When the window is due, the turns recorded since `appliedAtIso` are compared. A failure rate rise above 5 points, mean steps above 25 percent, or prompt tokens above 15 percent disposes the section.
+5. The revert is journaled and counted; two in a row park composition changes for the session.
+
+Anything larger than a prompt addition stays a bundle. That is not a limitation of the implementation but of the host contract: `mount` binds a preset to a blank session, and re-binding one that already ran corrupts it.
 
 ### Notes from the host research
 

@@ -62,6 +62,9 @@ Restart once. No configuration is required: observation and memory start immedia
     baseDir: .dsh/self-harness
     digestEvery: 20       # observed turns between digest rewrites
     distillMinRepeats: 3  # clean repetitions before a skill is written
+    autoLoop: true        # let the 15 minute idle trigger run the whole loop
+    autoApply: true       # apply a prompt-only candidate that probed improved
+    watchTurns: 12        # turns watched before an applied change is kept
 ```
 
 ## Tools
@@ -76,6 +79,7 @@ The slow path is also callable by hand, and it is what the loop uses internally.
 | `self_adopt` | Turns a probed candidate into an installable bundle and appends the lesson. Never installs. |
 | `self_status` | What was learned, what was proposed, how each candidate scored. |
 | `memory_search` | Searches the digest, past turns, and distilled skills. |
+| `self_loop` | Runs diagnose → propose → probe → apply once, with the same gates the idle trigger uses. |
 
 ## Why this shape
 
@@ -126,7 +130,9 @@ Contributions welcome; read [CONTRIBUTING.md](CONTRIBUTING.md) first, because mo
 
 ## Status
 
-v0.2 in progress. Observation, memory, skill distillation, and the live prompt section ship in this version. Probe-gated automatic composition and the UI panel are the next two items in [ROADMAP.md](ROADMAP.md).
+v0.2 ships observation, memory, skill distillation, the live prompt section, an unattended loop, and automatic apply with auto-revert for prompt-level candidates. Row-shaped candidates still go through a bundle and a human. A UI panel is the next item in [ROADMAP.md](ROADMAP.md).
+
+How a change is applied without a restart, and why that is narrower than "rewrite the harness": [docs/AUTONOMY.md](docs/AUTONOMY.md#the-shape-of-an-automatic-apply).
 
 ## License
 
