@@ -14,7 +14,7 @@
   セッション ──► 観察 ──► 記憶のダイジェスト ──► スキル ──► プロンプトの節      │
         │        (モデルなし)   (20 ターンごと)   (3 回連続成功)                  │
         │                                                                        │
-        └──────────── 測ってからでないと働き方を変えない ───────────────────────┘
+        └──────────── 測ってからでないとハーネスを変えない ─────────────────────┘
                                      │
                      fracture_diagnose ──► fracture_propose ──► fracture_probe ──► fracture_adopt
                         セッションログ      candidate.json       二度の実行を      バンドルと
@@ -114,11 +114,11 @@ journal.md
 ## 導入
 
 ```bash
-dsh plugin --profile web add dsh-fracture                     # 公開版
 dsh plugin --profile web add github:miketako3/dsh-fracture    # main の最新
+dsh plugin --profile web add dsh-fracture                     # npm に出たあと
 ```
 
-npm のレジストリにあるのはまだ 0.1.0 で、自走ループ、記憶、自動適用は `main` に入っている。git 形式で入れると、インストール時にビルドされる。
+この名前での npm 公開はまだない。動くのは git 形式で、`main` から取得し、インストール時にビルドする。旧名の `dsh-self-harness` には 0.1.0 があるが、ここで説明したループと記憶は入っていない。
 
 一度だけ再起動する。設定は要らない。観察と記憶はその場で始まる。
 

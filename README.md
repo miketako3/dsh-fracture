@@ -3,7 +3,7 @@
 A DSH plugin that reads your finished sessions, finds where the harness makes the agent stumble, writes the fix as data, and runs the task twice to check whether the fix helped.
 
 [![CI](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/dsh-fracture.svg)](https://www.npmjs.com/package/dsh-fracture)
+[![npm](https://img.shields.io/npm/v/dsh-fracture.svg?label=npm)](https://www.npmjs.com/package/dsh-fracture)
 [![license](https://img.shields.io/npm/l/dsh-fracture.svg)](LICENSE)
 [![node](https://img.shields.io/node/v/dsh-fracture.svg)](package.json)
 
@@ -15,7 +15,7 @@ English | [日本語](README.ja.md)
   your session ──► observations ──► memory digest ──► skills ──► prompt section  │
         │              (no model)      (every 20 turns)  (3 clean repeats)       │
         │                                                                        │
-        └──────────── changes how you work only after a measurement ────────────┘
+        └──────────── changes the harness only after a measurement ─────────────┘
                                      │
                      fracture_diagnose ──► fracture_propose ──► fracture_probe ──► fracture_adopt
                         session log     candidate.json     two runs      bundle +
@@ -113,11 +113,11 @@ The turn that failed (`fix the flaky export test`) appears under "What fails", a
 ## Install
 
 ```bash
-dsh plugin --profile web add dsh-fracture                     # published release
 dsh plugin --profile web add github:miketako3/dsh-fracture    # current main
+dsh plugin --profile web add dsh-fracture                     # once it is on npm
 ```
 
-The npm registry still carries 0.1.0. The unattended loop, memory, and automatic apply are on `main`, and the git form installs it with a build step.
+There is no npm release under this name yet, so the git form is the one that works: it installs from `main` and builds the package on the way in. The old name, `dsh-self-harness`, has a 0.1.0 release that predates the loop and memory described here.
 
 Restart once. No configuration is required: observation and memory start immediately.
 
