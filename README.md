@@ -34,6 +34,55 @@ What it does is visible: a distilled skill, an applied change, and a revert each
 
 Everything it writes is a file you can read: `.dsh/self-harness/`.
 
+## See it without a model
+
+`npm run demo` feeds six synthetic turns through the same modules the plugin runs. No model, no network, no session. The output is what landed on disk:
+
+```text
+base directory: /var/folders/…/self-harness-demo-xxxx
+
+digest rewritten after turn 4
+distilled auto-read-edit
+
+memory/MEMORY.md
+# Memory
+
+_Updated 2026-10-20T09:00:00.000Z from 6 observed turns._
+
+## Working on
+
+- add pagination to the users endpoint (1x)
+- add pagination to the orders endpoint (1x)
+- add pagination to the invoices endpoint (1x)
+- fix the flaky export test (1x)
+- add pagination to the audit endpoint (1x)
+
+## What fails
+
+- bash COMMAND_FAILED (1x)
+
+## Procedures
+
+- read > edit (3x)
+- read > edit > bash (2x)
+- read > bash (1x)
+
+skills/
+  auto-read-edit/SKILL.md  (26 lines, generated: true)
+
+prompt index (what the model sees)
+  digest headings: Working on, What fails, Procedures
+  skills: auto-read-edit
+  turns observed: 6
+
+journal.md
+- 2026-10-20T03:22:04.176Z memory digest rewritten from 4 turns
+- 2026-10-20T03:22:04.178Z distilled skill auto-read-edit from 3 clean repetitions
+- 2026-10-20T03:22:04.179Z memory digest rewritten from 6 turns
+```
+
+The turn that failed (`fix the flaky export test`) is in "What fails" and its procedure never became a skill, because a corrected or failing run is not evidence that a procedure works. That is the whole idea in one screen.
+
 ## What runs by itself
 
 | Tier | Changes | Gate |

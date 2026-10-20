@@ -29,6 +29,51 @@
 差分も取れる。
 消せる。
 
+## モデルなしで見る
+
+`npm run demo` は、プラグインと同じモジュールに合成した 6 ターンを通す。
+モデルもネットワークもセッションも使わない。
+出力は実際にディスクへ書かれたものである。
+
+```text
+digest rewritten after turn 4
+distilled auto-read-edit
+
+memory/MEMORY.md
+# Memory
+
+_Updated 2026-10-20T09:00:00.000Z from 6 observed turns._
+
+## Working on
+
+- add pagination to the users endpoint (1x)
+- add pagination to the orders endpoint (1x)
+- add pagination to the invoices endpoint (1x)
+- fix the flaky export test (1x)
+- add pagination to the audit endpoint (1x)
+
+## What fails
+
+- bash COMMAND_FAILED (1x)
+
+## Procedures
+
+- read > edit (3x)
+- read > edit > bash (2x)
+- read > bash (1x)
+
+skills/
+  auto-read-edit/SKILL.md  (26 lines, generated: true)
+
+prompt index (what the model sees)
+  digest headings: Working on, What fails, Procedures
+  skills: auto-read-edit
+  turns observed: 6
+```
+
+失敗したターン（`fix the flaky export test`）は「What fails」に残り、その手順はスキルにならない。
+訂正された実行や失敗した実行は、手順が通用する証拠ではないからである。
+
 ## 自動で走る範囲
 
 | 段 | 変わるもの | 関門 |
