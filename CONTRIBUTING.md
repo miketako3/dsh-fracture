@@ -30,7 +30,7 @@ Node 22 以降が必要です。
 | `src/observe.ts` | ターンごとの観察を取り出す |
 | `src/skills.ts` | スキルになる手順の検出と書き出し |
 | `src/memory.ts` | 観察の記録、ダイジェスト、ジャーナル、検索 |
-| `src/guard.ts` | 触らせない範囲 |
+| `src/guard.ts` | 変更してはいけない範囲 |
 | `src/probe.ts` | 両側の実行と判定 |
 | `src/propose.ts`、`src/adopt.ts` | 候補の作成とバンドルの生成 |
 | `src/child.ts`、`src/sessions.ts` | ホストとの接点。子エージェントとセッションの読み出し |

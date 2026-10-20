@@ -1,6 +1,6 @@
 # dsh-fracture
 
-A DSH plugin that reads your finished sessions, finds where the harness makes the agent stumble, writes the fix as data, and runs the task twice to check whether the fix helped.
+A DSH plugin that reads your finished sessions, finds where the harness makes the agent fail, writes the fix as data, and runs the task twice to check whether the fix helped.
 
 [![CI](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -39,15 +39,13 @@ DSH builds an agent out of an ordered list of plugin rows. A model, a prompt sec
 
 Two consequences follow. A harness is data, so a candidate harness is a diff against the current one. And two harnesses can exist at the same time, so a change can be judged by running the same task on both instead of asking a model whether its own idea sounds good.
 
-The name is the working metaphor. A harness gives way along particular lines: a tool called before the file was ever read, an approval prompt that arrives after the work is done, a procedure rediscovered every morning. Those lines are the fractures. Fracture finds them in the session log, and every change it keeps is aimed at one of them.
-
 ## The problem
 
 Three failures are common in a setup that nobody has time to tune.
 
 **The same mistake outlives the session.** A tool fails because the project uses pnpm, or because the fixture has to be built before the test runs. The model works it out, the session ends, and the next session starts from nothing.
 
-**Harness tuning is guesswork.** Someone edits the system prompt, decides the agent feels better, and has no way to check. The edit stays. The next edit lands on top of it. Two months later nobody knows which line is load-bearing.
+**Harness tuning is guesswork.** Someone edits the system prompt, decides the agent feels better, and has no way to check. The edit stays. The next edit lands on top of it. Two months later nobody knows which line matters.
 
 **Nothing accumulates.** When a session goes well, the procedure that made it go well is not written down anywhere the next session can read.
 
@@ -55,7 +53,7 @@ All three have the same cause: nothing in the loop records what happened, and no
 
 ## What it does
 
-It records every finished turn as facts rather than prose: which tools ran, in which order, what failed, whether you had to step in and correct it. After twenty turns that log becomes a digest. After three clean repetitions of one procedure, the procedure becomes a skill. The digest and the skill list go into the prompt as a short index, so the agent knows what it has learned without carrying the whole store.
+It records every finished turn as facts rather than prose: which tools ran, in which order, what failed, whether you had to step in and correct it. After twenty turns that log becomes a digest. After three clean repetitions of one procedure, the procedure becomes a skill. The digest and the skill list go into the prompt as a short index, so the agent knows what it has learned without loading everything it has recorded.
 
 It also changes the harness, but only where a measurement supports the change, and the depth of what it may change on its own is bounded:
 
