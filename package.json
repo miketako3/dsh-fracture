@@ -1,7 +1,7 @@
 {
   "name": "dsh-fracture",
   "version": "0.2.0",
-  "description": "A harness that rewrites itself, one measured change at a time: observe your DSH sessions, distil skills, propose harness edits, prove them on a second run.",
+  "description": "A DSH plugin that reads your finished sessions, finds where the harness makes the agent stumble, and keeps only the changes a second run proves.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -30,7 +30,9 @@
     "dsh-plugin",
     "cordis",
     "self-improvement",
-    "agent-harness"
+    "agent-harness",
+    "agent-memory",
+    "skills"
   ],
   "license": "MIT",
   "repository": {

@@ -1,6 +1,12 @@
 # Design
 
-This document records the decisions behind `dsh-fracture`, including the options that were rejected. It assumes you have read the README.
+This document records the decisions behind `dsh-fracture`, including the options that were rejected. It assumes you have read the README. It describes the v0.1 loop, which is still the slow path; [AUTONOMY.md](AUTONOMY.md) supersedes sections 3 and 4 where the v0.2 running loop differs.
+
+## 0. The name
+
+`fracture` names the object, not the goal. A harness gives way along particular lines, and those lines are visible in a session log before anyone has a theory about them: a tool called before its input was read, an approval prompt that arrives after the work is done, a procedure re-derived on every run. The plugin finds those lines and aims each change at one of them.
+
+The earlier name described what the project wanted to be, which made every sentence about it a claim rather than an observation.
 
 ## 1. The problem
 
@@ -31,7 +37,7 @@ fracture_diagnose  →  fracture_propose  →  fracture_probe  →  fracture_ado
    evidence        candidate        contrast        artifact
 ```
 
-Each arrow is a tool the model calls itself. There is no scheduler and no background loop: the user, or the model, decides when to advance. That keeps the loop auditable and avoids an agent that rewrites itself while nobody is watching.
+Each arrow is a tool the model calls itself. In v0.1 that was the only way to advance the loop. v0.2 adds a trigger (session events, plus a 15 minute idle check) for the two additive tiers, and for the composition tier a probe verdict is still required before anything is applied. The gates are in [AUTONOMY.md](AUTONOMY.md); this section describes the tool layer both paths share.
 
 ### 3.1 Diagnose
 

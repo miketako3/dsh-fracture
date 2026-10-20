@@ -1,6 +1,6 @@
 # Autonomy
 
-v0.1 shipped a toolkit: the model calls `fracture_diagnose`, `fracture_propose`, `fracture_probe`, `fracture_adopt`. That is not self-improvement, it is assisted improvement.
+v0.1 shipped a toolkit: the model calls `fracture_diagnose`, `fracture_propose`, `fracture_probe`, `fracture_adopt`. That is assisted improvement. What follows is the design for the part that runs without being called, and the boundaries it may not cross.
 
 This document defines the next shape: a plugin that **runs by itself** — accumulating memory, distilling skills, and changing the harness without being asked — and the boundaries that keep that autonomy from being a liability.
 
