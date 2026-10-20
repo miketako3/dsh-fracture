@@ -3,23 +3,35 @@
 終わったセッションを読み、ハーネスがエージェントをつまずかせている箇所を見つけ、直しをデータとして書き、同じ仕事を二度走らせて効いたかどうかを確かめる DSH プラグイン。
 
 [![CI](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/dsh-fracture.svg)](https://www.npmjs.com/package/dsh-fracture)
 [![license](https://img.shields.io/npm/l/dsh-fracture.svg)](LICENSE)
 
 [English](README.md) | 日本語
 
-```text
-        ┌──────────────────────────── 自分で走る範囲 ────────────────────────────┐
-        │                                                                        │
-  セッション ──► 観察 ──► 記憶のダイジェスト ──► スキル ──► プロンプトの節      │
-        │        (モデルなし)   (20 ターンごと)   (3 回連続成功)                  │
-        │                                                                        │
-        └──────────── 測ってからでないとハーネスを変えない ─────────────────────┘
-                                     │
-                     fracture_diagnose ──► fracture_propose ──► fracture_probe ──► fracture_adopt
-                        セッションログ      candidate.json       二度の実行を      バンドルと
-                          の証拠          行とファイル付き       比較              教訓
+## 構成
+
+```mermaid
+flowchart LR
+  S[session events] -->|turn end| O[observe.ts<br/>per-turn facts]
+  O --> M[(memory<br/>observations.jsonl)]
+  M --> D[digest<br/>MEMORY.md]
+  M --> K[skills<br/>SKILL.md]
+  D --> P[prompt section<br/>titles only]
+  K --> P
+  K -->|ctx.skills.register| T[skill catalog]
+  O --> G{repeated<br/>and clean?}
+  G -->|yes| K
+  D -.->|evidence| X[fracture_diagnose]
+  X --> Y[fracture_propose] --> Z[fracture_probe] --> A[fracture_adopt]
+  Z -->|verdict| W[watch window<br/>auto-revert]
+  A --> B[bundle<br/>human installs]
 ```
+
+コードを読む前に知っておくべき性質が二つある。
+
+- `plugin/` を持つ候補は別の `dsh` プロセスで走る。検証していないコードが、それを判定するプロセスに読み込まれることはない。
+- 承認、サンドボックスのポリシー、プラグインマネージャ、このプラグイン自身に触れる候補は、保存の前と試行の前の二度はじく。
+
+詳しくは [SECURITY.md](SECURITY.md)。段の線をどこに引いたかの理由は [docs/AUTONOMY.md](docs/AUTONOMY.md) にある。
 
 ## これは何か
 
@@ -62,63 +74,13 @@ DSH はエージェントをプラグイン行の並びとして組み立てる�
 
 スキルを蒸留したとき、変更を適用したとき、巻き戻したときは、折りたたまれた通知が一度だけセッションに出る。ループが黙って何かをすることはない。それ以外のときは出さない。毎ターン通知が出るなら、それはもう情報ではない。
 
-## モデルなしで動きを見る
-
-`npm run demo` は、合成した 6 ターンを、プラグインと同じモジュールに通す。モデルもネットワークもセッションも使わない。以下はその実行結果で、実際にディスクへ書かれたものである。
-
-```text
-base directory: /var/folders/…/fracture-demo-xxxx
-
-digest rewritten after turn 4
-distilled auto-read-edit
-
-memory/MEMORY.md
-# Memory
-
-_Updated 2026-10-20T09:00:00.000Z from 6 observed turns._
-
-## Working on
-
-- add pagination to the users endpoint (1x)
-- add pagination to the orders endpoint (1x)
-- add pagination to the invoices endpoint (1x)
-- fix the flaky export test (1x)
-- add pagination to the audit endpoint (1x)
-
-## What fails
-
-- bash COMMAND_FAILED (1x)
-
-## Procedures
-
-- read > edit (3x)
-- read > edit > bash (2x)
-- read > bash (1x)
-
-skills/
-  auto-read-edit/SKILL.md  (26 lines, generated: true)
-
-prompt index (what the model sees)
-  digest headings: Working on, What fails, Procedures
-  skills: auto-read-edit
-  turns observed: 6
-
-journal.md
-- 2026-10-20T03:22:04.176Z memory digest rewritten from 4 turns
-- 2026-10-20T03:22:04.178Z distilled skill auto-read-edit from 3 clean repetitions
-- 2026-10-20T03:22:04.179Z memory digest rewritten from 6 turns
-```
-
-失敗したターン（`fix the flaky export test`）は「What fails」に残り、その手順はスキルにならない。失敗した実行や訂正された実行は、その手順が通用する証拠ではないからである。
-
 ## 導入
 
 ```bash
-dsh plugin --profile web add dsh-fracture                     # npm の 0.2.0
-dsh plugin --profile web add github:miketako3/dsh-fracture    # main の最新
+dsh plugin --profile web add github:miketako3/dsh-fracture
 ```
 
-0.2.0 は npm にあり、ループ、記憶、自動適用が入っている。git 形式は `main` を追い、インストール時にビルドするので、公開版より新しいコミットを使いたいときに選ぶ。旧名の `dsh-self-harness` には 0.1.0 が一つあるだけで、ここで説明した機能は入っていない。入れてはいけない。
+これが配布の経路である。リポジトリから取得し、インストール時にビルドする。
 
 一度だけ再起動する。設定は要らない。観察と記憶はその場で始まる。
 
@@ -162,38 +124,12 @@ Harness² の 8 ファイルのハーネス木は採らない。DSH の行の並
 
 残りは DSH 自身の仕組みである。構成にはプラグイン行、手順には `SKILL.md` の約束、観察には `session/event`、注入にはエージェント単位のプロンプト節を使う。Harness² のコードは同梱していない。
 
-## 構成
-
-```mermaid
-flowchart LR
-  S[session events] -->|turn end| O[observe.ts<br/>per-turn facts]
-  O --> M[(memory<br/>observations.jsonl)]
-  M --> D[digest<br/>MEMORY.md]
-  M --> K[skills<br/>SKILL.md]
-  D --> P[prompt section<br/>titles only]
-  K --> P
-  K -->|ctx.skills.register| T[skill catalog]
-  O --> G{repeated<br/>and clean?}
-  G -->|yes| K
-  D -.->|evidence| X[fracture_diagnose]
-  X --> Y[fracture_propose] --> Z[fracture_probe] --> A[fracture_adopt]
-  Z -->|verdict| W[watch window<br/>auto-revert]
-  A --> B[bundle<br/>human installs]
-```
-
-コードを読む前に知っておくべき性質が二つある。
-
-- `plugin/` を持つ候補は別の `dsh` プロセスで走る。検証していないコードが、それを判定するプロセスに読み込まれることはない。
-- 承認、サンドボックスのポリシー、プラグインマネージャ、このプラグイン自身に触れる候補は、保存の前と試行の前の二度はじく。
-
-詳しくは [SECURITY.md](SECURITY.md)。段の線をどこに引いたかの理由は [docs/AUTONOMY.md](docs/AUTONOMY.md) にある。
-
 ## 開発
 
 ```bash
 npm install && npm test     # 128 個のテスト。node:test だけを使う
 npm run build
-npm run demo                # モデルなしでループを回す
+npm run demo                # 合成ターンでループを一周させる
 ```
 
 変更は歓迎するが、[CONTRIBUTING.md](CONTRIBUTING.md) を先に読んでほしい。ここでの変更の多くは機能を足すのではなく、境界を動かす。

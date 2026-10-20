@@ -3,28 +3,41 @@
 A DSH plugin that reads your finished sessions, finds where the harness makes the agent stumble, writes the fix as data, and runs the task twice to check whether the fix helped.
 
 [![CI](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/dsh-fracture.svg?label=npm)](https://www.npmjs.com/package/dsh-fracture)
 [![license](https://img.shields.io/npm/l/dsh-fracture.svg)](LICENSE)
-[![node](https://img.shields.io/node/v/dsh-fracture.svg)](package.json)
 
 English | [日本語](README.ja.md)
 
-```text
-        ┌──────────────────────────── runs on its own ───────────────────────────┐
-        │                                                                        │
-  your session ──► observations ──► memory digest ──► skills ──► prompt section  │
-        │              (no model)      (every 20 turns)  (3 clean repeats)       │
-        │                                                                        │
-        └──────────── changes the harness only after a measurement ─────────────┘
-                                     │
-                     fracture_diagnose ──► fracture_propose ──► fracture_probe ──► fracture_adopt
-                        session log     candidate.json     two runs      bundle +
-                         evidence       + rows/files      compared       lesson
+## Architecture
+
+```mermaid
+flowchart LR
+  S[session events] -->|turn end| O[observe.ts<br/>per-turn facts]
+  O --> M[(memory<br/>observations.jsonl)]
+  M --> D[digest<br/>MEMORY.md]
+  M --> K[skills<br/>SKILL.md]
+  D --> P[prompt section<br/>titles only]
+  K --> P
+  K -->|ctx.skills.register| T[skill catalog]
+  O --> G{repeated<br/>and clean?}
+  G -->|yes| K
+  D -.->|evidence| X[fracture_diagnose]
+  X --> Y[fracture_propose] --> Z[fracture_probe] --> A[fracture_adopt]
+  Z -->|verdict| W[watch window<br/>auto-revert]
+  A --> B[bundle<br/>human installs]
 ```
+
+Two properties matter before reading the code:
+
+- A candidate that ships a `plugin/` directory runs in a separate `dsh` process, so unverified code never loads in the process that judges it.
+- Candidates that touch approval, sandbox policy, the plugin manager, or this plugin are rejected before they are stored, and again before they are probed.
+
+Details in [SECURITY.md](SECURITY.md). The reasoning behind the tier boundaries is in [docs/AUTONOMY.md](docs/AUTONOMY.md).
 
 ## What it is
 
-DSH builds an agent out of an ordered list of plugin rows. A model, a prompt section, a skill root, a tool, an approval policy: each is a row with its own config. Two consequences follow. A harness is data, so a candidate harness is a diff against the current one. And two harnesses can exist at the same time, so a change can be judged by running the same task on both instead of asking a model whether its own idea sounds good.
+DSH builds an agent out of an ordered list of plugin rows. A model, a prompt section, a skill root, a tool, an approval policy: each is a row with its own config.
+
+Two consequences follow. A harness is data, so a candidate harness is a diff against the current one. And two harnesses can exist at the same time, so a change can be judged by running the same task on both instead of asking a model whether its own idea sounds good.
 
 The name is the working metaphor. A harness gives way along particular lines: a tool called before the file was ever read, an approval prompt that arrives after the work is done, a procedure rediscovered every morning. Those lines are the fractures. Fracture finds them in the session log, and every change it keeps is aimed at one of them.
 
@@ -61,63 +74,13 @@ Everything it writes is a file you can read: `.dsh/fracture/`.
 
 A distilled skill, an applied change, and a revert each post one collapsed notice into the session, so the loop never acts silently. Nothing else does, because a notice per turn stops being information.
 
-## See it without a model
-
-`npm run demo` feeds six synthetic turns through the same modules the plugin runs. No model, no network, no session. This is the output, and it is what landed on disk:
-
-```text
-base directory: /var/folders/…/fracture-demo-xxxx
-
-digest rewritten after turn 4
-distilled auto-read-edit
-
-memory/MEMORY.md
-# Memory
-
-_Updated 2026-10-20T09:00:00.000Z from 6 observed turns._
-
-## Working on
-
-- add pagination to the users endpoint (1x)
-- add pagination to the orders endpoint (1x)
-- add pagination to the invoices endpoint (1x)
-- fix the flaky export test (1x)
-- add pagination to the audit endpoint (1x)
-
-## What fails
-
-- bash COMMAND_FAILED (1x)
-
-## Procedures
-
-- read > edit (3x)
-- read > edit > bash (2x)
-- read > bash (1x)
-
-skills/
-  auto-read-edit/SKILL.md  (26 lines, generated: true)
-
-prompt index (what the model sees)
-  digest headings: Working on, What fails, Procedures
-  skills: auto-read-edit
-  turns observed: 6
-
-journal.md
-- 2026-10-20T03:22:04.176Z memory digest rewritten from 4 turns
-- 2026-10-20T03:22:04.178Z distilled skill auto-read-edit from 3 clean repetitions
-- 2026-10-20T03:22:04.179Z memory digest rewritten from 6 turns
-```
-
-The turn that failed (`fix the flaky export test`) appears under "What fails", and its procedure never became a skill, because a failed or corrected run is not evidence that a procedure works.
-
 ## Install
 
 ```bash
-dsh plugin --profile web add dsh-fracture                     # 0.2.0 from npm
-dsh plugin --profile web add github:miketako3/dsh-fracture    # newest commits
+dsh plugin --profile web add github:miketako3/dsh-fracture
 ```
 
-0.2.0 is on npm and contains the loop, the memory layer, and automatic apply. The git form tracks `main`, builds the package on install, and is what to use if you want a commit past the release. An earlier package name, `dsh-self-harness`, shipped one release (0.1.0) that predates all of this; do not install it.
+That is the distribution path. It installs from the repository and builds the package on the way in.
 
 Restart once. No configuration is required: observation and memory start immediately.
 
@@ -161,38 +124,12 @@ Harness²'s eight-file harness tree is deliberately not adopted. DSH's row list 
 
 The rest is DSH's own material: plugin rows for composition, the `SKILL.md` convention for procedures, `session/event` for observation, and scoped prompt sections for injection. No Harness² code is vendored.
 
-## Architecture
-
-```mermaid
-flowchart LR
-  S[session events] -->|turn end| O[observe.ts<br/>per-turn facts]
-  O --> M[(memory<br/>observations.jsonl)]
-  M --> D[digest<br/>MEMORY.md]
-  M --> K[skills<br/>SKILL.md]
-  D --> P[prompt section<br/>titles only]
-  K --> P
-  K -->|ctx.skills.register| T[skill catalog]
-  O --> G{repeated<br/>and clean?}
-  G -->|yes| K
-  D -.->|evidence| X[fracture_diagnose]
-  X --> Y[fracture_propose] --> Z[fracture_probe] --> A[fracture_adopt]
-  Z -->|verdict| W[watch window<br/>auto-revert]
-  A --> B[bundle<br/>human installs]
-```
-
-Two properties matter before reading the code:
-
-- A candidate that ships a `plugin/` directory runs in a separate `dsh` process, so unverified code never loads in the process that judges it.
-- Candidates that touch approval, sandbox policy, the plugin manager, or this plugin are rejected before they are stored, and again before they are probed.
-
-Details in [SECURITY.md](SECURITY.md). The reasoning behind the tier boundaries is in [docs/AUTONOMY.md](docs/AUTONOMY.md).
-
 ## Development
 
 ```bash
 npm install && npm test     # 128 tests, node:test only
 npm run build
-npm run demo                # the loop without a model
+npm run demo                # one loop over synthetic turns
 ```
 
 Contributions are welcome, but read [CONTRIBUTING.md](CONTRIBUTING.md) first, because most changes here move a boundary rather than add a feature.
