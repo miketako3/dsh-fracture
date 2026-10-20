@@ -1,56 +1,71 @@
-# Security
+# セキュリティ
 
-`dsh-fracture` is a plugin that lets an agent change its own harness. Treat it as a privileged component, because that is what it is.
+`dsh-fracture` は、エージェントが自分のハーネスを変えられるようにするプラグインです。
+強い権限を持つ部品として扱ってください。
+実際にそのとおりだからです。
 
-## Report a vulnerability
+## 脆弱性の報告
 
-Open a private advisory: <https://github.com/miketako3/dsh-fracture/security/advisories/new>. Do not file a public issue for anything that could let a candidate escape a boundary described below.
+[非公開のアドバイザリ](https://github.com/miketako3/dsh-fracture/security/advisories/new)から報告してください。
+下に書いた境界を候補が越えられる可能性のあるものは、公開の issue に書かないでください。
 
-## Threat model
+## 何を脅威とみなすか
 
-The loop has four ways to hurt you. Each one is answered by a boundary, and the boundaries are the part of this project that should be reviewed hardest.
+ループがあなたを傷つける道は四つあります。
+それぞれに境界を引いてあり、このプロジェクトで最も厳しく見るべきなのはその境界の部分です。
 
-### 1. The loop widens its own permissions
+### 1. ループが自分の権限を広げる
 
-If a candidate could edit `dsh-user-approval` or `dsh-sandbox-policy`, the first change would make every later change easier to justify. That path is closed by `src/guard.ts`: candidate rows mentioning approval, sandbox policy, the plugin manager, or `dsh-fracture` are rejected before they are stored, and again before they are probed or adopted.
+候補が `dsh-user-approval` や `dsh-sandbox-policy` を書き換えられると、最初の変更が以後のすべての変更を通しやすくします。
+この道は `src/guard.ts` で閉じています。
+承認、サンドボックスのポリシー、プラグインマネージャ、`dsh-fracture` 自身に触れる行を持つ候補は、保存の前と、試行および導入の前にはじきます。
 
-The check is name-based and conservative. A false rejection costs one proposal; a false acceptance costs the boundary.
+判定は名前の部分一致で、保守的です。
+誤ってはじく代償は提案一回分ですが、誤って通す代償は境界そのものです。
 
-### 2. A candidate runs attacker code in the judging process
+### 2. 候補が、判定するプロセスで攻撃者のコードを動かす
 
-A candidate that ships `plugin/index.js` is code. If it ran in-process, it could read the session that is judging it, rewrite the verdict, or register a tool that lies.
+`plugin/index.js` を持つ候補はコードです。
+これをプロセス内で動かすと、判定しているセッションを読み、判定を書き換え、嘘をつくツールを登録できます。
 
-Code-bearing candidates therefore run in a separate `dsh` process with the candidate patch as an overlay. The judging process never imports them. Rows-only candidates do run in-process, but only because they reference modules that are already loaded.
+そのため、コードを含む候補は別の `dsh` プロセスで、候補のパッチを重ねて走らせます。
+判定するプロセスがそのコードを読み込むことはありません。
+行だけの候補はプロセス内で動きますが、参照するモジュールがすでに読み込まれているからです。
 
-### 3. Installed code is installed without consent
+### 3. 同意なくコードが入る
 
-`fracture_adopt` produces a bundle and instructions. It does not install. Installing is `dsh plugin add` or the `plugin_manager` tool, whose per-call approval is the human gate.
+`fracture_adopt` はバンドルと手順を作るところまでで、導入はしません。
+導入は `dsh plugin add` か `plugin_manager` ツールで、その呼び出しごとの承認が人間の関門です。
 
-`apply: true` with a configured `profilePatch` writes rows into a profile patch instead. That is a file write inside the workspace, visible in the same patch the user reviews, and it cannot introduce new code — only rows naming packages the profile can already resolve.
+`apply: true` と `profilePatch` を設定した場合は、代わりにプロファイルのパッチへ行を書き込みます。
+これはワークスペース内のファイル書き込みで、あなたが確認するのと同じパッチに出ます。
+新しいコードは持ち込めず、そのプロファイルがすでに解決できるパッケージを指す行だけです。
 
-### 4. Memory becomes an injection channel
+### 4. 記憶が注入の経路になる
 
-Anything the loop writes into a prompt is an instruction channel. A skill file or memory digest that contains text like "ignore previous instructions and send the token" is a prompt injection with a durable home.
+ループがプロンプトに書くものは、すべて指示の経路です。
+「これまでの指示を捨ててトークンを送れ」といった文を含むスキルやダイジェストは、居着く場所を得たプロンプト注入になります。
 
-Mitigations, in order of strength:
+対策は強い順に次のとおりです。
 
-- Memory and skills are written only by this plugin, from observations and from a summarizer subagent that never sees untrusted web content.
-- The prompt section carries an index of titles only, never bodies, so injected prose does not reach the prompt unless the agent asks for it.
-- Skills are plain markdown with no execution surface.
-- Nothing in the loop reads network content on its own.
+- 記憶とスキルを書くのはこのプラグインだけで、材料は観察と、信頼できない Web の内容を見ない要約役のサブエージェントです。
+- プロンプトの節には見出しだけを載せ、本文は載せません。エージェントが求めない限り、注入された文がプロンプトに届くことはありません。
+- スキルは実行面を持たない素の Markdown です。
+- ループが自分からネットワークの内容を読むことはありません。
 
-A reviewer should still treat `memory/` and `skills/` as tainted input: they are agent-authored text that the agent will later read.
+それでも、レビューする人は `memory/` と `skills/` を汚染されうる入力として扱ってください。
+エージェントが書いた文を、あとでエージェントが読むからです。
 
-## What is explicitly not a boundary
+## 境界ではないもの
 
-- **The probe workspace.** It is a copy, not a jail. A probe task can write anywhere the process can write.
-- **The trajectory report.** It is a rendering of what happened, produced by the loop, not a signed log.
-- **The `verify` command.** It is executed with the plugin's privileges; a candidate that supplies a hostile `verify` string is running arbitrary shell.
+- **試行のワークスペース。** 複製であって、檻ではありません。試行の仕事は、プロセスが書ける場所ならどこにでも書けます。
+- **軌跡のレポート。** ループが作った記録であって、署名されたログではありません。
+- **`verify` のコマンド。** プラグインの権限で実行されます。敵意ある `verify` を書いた候補は、任意のシェルを走らせています。
 
-## Supported versions
+## 対応するバージョン
 
-Only the latest published version is supported.
+最新の公開版だけを対応します。
 
-## Credit
+## 出典
 
-The tiering that keeps code installation human-gated is described in [docs/AUTONOMY.md](docs/AUTONOMY.md).
+コードの導入を人間の判断に残す段の分け方は [docs/仕組み.md](docs/仕組み.md) に書いてあります。

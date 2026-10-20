@@ -3,7 +3,7 @@
 A DSH plugin that reads your finished sessions, finds where the harness makes the agent stumble, writes the fix as data, and runs the task twice to check whether the fix helped.
 
 [![CI](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml)
-[![license](https://img.shields.io/npm/l/dsh-fracture.svg)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 English | [日本語](README.ja.md)
 
@@ -31,7 +31,7 @@ Two properties matter before reading the code:
 - A candidate that ships a `plugin/` directory runs in a separate `dsh` process, so unverified code never loads in the process that judges it.
 - Candidates that touch approval, sandbox policy, the plugin manager, or this plugin are rejected before they are stored, and again before they are probed.
 
-Details in [SECURITY.md](SECURITY.md). The reasoning behind the tier boundaries is in [docs/AUTONOMY.md](docs/AUTONOMY.md).
+Details in [SECURITY.md](SECURITY.md). The reasoning behind the tier boundaries is in [docs/仕組み.md](docs/仕組み.md) (Japanese).
 
 ## What it is
 
@@ -111,6 +111,19 @@ The loop uses these internally, and any of them can be called by hand.
 | `fracture_status` | What was learned, what was proposed, how each candidate scored. |
 | `fracture_loop` | Runs diagnose → propose → probe → apply once, with the same gates the idle trigger uses. |
 | `memory_search` | Searches the digest, past turns, and distilled skills. |
+
+## Documentation
+
+| File | Contents |
+| --- | --- |
+| [README.ja.md](README.ja.md) | The same introduction in Japanese |
+| [docs/仕組み.md](docs/仕組み.md) | How it works: the four tiers, the triggers, the watch window, the protected surface |
+| [SECURITY.md](SECURITY.md) | The four threats and where the boundaries are |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development rules and what a good pull request looks like |
+| [ROADMAP.md](ROADMAP.md) | What comes next |
+| [examples/](examples/) | One candidate of each shape, and the field reference |
+
+The design and contribution documents are written in Japanese. That is a deliberate choice: they are read by the person who maintains the loop, and a translated design document loses the precision that makes it useful.
 
 ## Where the ideas come from
 

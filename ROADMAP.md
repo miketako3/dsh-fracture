@@ -1,38 +1,40 @@
-# Roadmap
+# ロードマップ
 
-Ordered by what makes the loop trustworthy, not by what is fun to build.
+ループの信用を上げる順に並べています。
+作っていて楽しい順ではありません。
 
-## v0.2 — autonomous observation
+## 0.2 観察が自分で回る（済）
 
-The loop stops waiting to be asked.
+ループが、頼まれるのを待つのをやめます。
 
-- [ ] Turn-end observation log, no model call
-- [ ] Memory digest rewritten by a summarizer subagent at session close
-- [ ] Distilled skills written to `skills/`, never overwriting a hand-written file
-- [ ] Session notifications for anything above memory
-- [ ] Budget accounting and a self-downgrade after repeated internal failures
+- [x] ターンの終わりに観察を記録する。モデルは呼ばない
+- [x] ダイジェストを自動で書き直す
+- [x] 蒸留したスキルを `skills/` に書き出す。手書きは上書きしない
+- [x] 記憶より上の段の行動を、セッション内の通知で知らせる
+- [x] 予算を数え、内部の失敗が続いたら自分を落とす
 
-## v0.3 — autonomous composition
+## 0.3 構成が自分で変わる（済）
 
-The prompt-level part of the harness changes without a human.
+ハーネスのうち、プロンプトの部分が人間なしで変わります。
 
-- [ ] Probe-gated apply of rows that introduce no new code
-- [ ] Watch window with automatic revert on regression
-- [ ] First-turn prompt token measurement before and after a change
-- [ ] Rubric judging behind a flag, with the deterministic check always taking precedence
+- [x] 新しいコードを持ち込まない行を、試行を経て適用する
+- [x] 監視期間を置き、悪化したら自動で戻す
+- [ ] 変更の前後で、初回プロンプトのトークン数を測る
+- [ ] 採点による判定をフラグの裏に置く。決定的な検証を常に優先する
 
-## v0.4 — the part people can see
+## 0.4 人が見える部分
 
-- [ ] `dsh-fracture` status panel in the web UI, once the client-plugin surface is settled
-- [ ] Shareable candidate library, keyed by domain
-- [ ] `dsh fracture` subcommand for the same operations outside a session
+- [ ] Web UI の状態パネル。クライアントプラグインの API が固まってから
+- [ ] 領域ごとに整理した、共有できる候補のライブラリ
+- [ ] セッションの外から同じ操作ができる `dsh fracture` サブコマンド
 
-## Explicitly not planned
+## やらないこと
 
-- **Automatic installation of code.** The loop may author and probe a plugin; installing it stays a human decision. See [docs/AUTONOMY.md](docs/AUTONOMY.md) section 9.
-- **A hosted service.** Everything runs locally, against your own sessions.
-- **Model-side fine-tuning.** This learns a harness, not weights.
+- **コードの自動導入。** ループはプラグインを書いて試すところまでです。入れるかどうかは人間が決めます。[docs/仕組み.md](docs/仕組み.md) の段の分け方を読んでください。
+- **ホストするサービス。** すべて手元で、あなた自身のセッションに対して動きます。
+- **モデルの微調整。** これはハーネスを学ぶもので、重みを学ぶものではありません。
 
-## How to influence this
+## 関わり方
 
-Open a candidate issue with the evidence you have. Roadmap items move when someone shows the loop failing in a way the item would fix.
+手元にある証拠を添えて、候補の issue を立ててください。
+このロードマップの項目は、ループがその項目で直る形の失敗をする例が出たときに動きます。

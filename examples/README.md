@@ -1,10 +1,11 @@
-# Examples
+# 例
 
-Two candidate shapes, one for each way the loop can change a harness.
+ループがハーネスを変える道は二つあり、それぞれの形の候補を一つずつ置いています。
 
-A candidate is a directory under `<baseDir>/candidates/<id>/` containing `candidate.json` and, optionally, `skills/` and `plugin/`. These files are what `fracture_propose` writes and what `fracture_probe` and `fracture_adopt` read.
+候補は `<baseDir>/candidates/<id>/` の下のディレクトリで、`candidate.json` と、必要なら `skills/` と `plugin/` を持ちます。
+`fracture_propose` が書き、`fracture_probe` と `fracture_adopt` が読みます。
 
-## `prompt-addendum`: applied live
+## `prompt-addendum`：その場で適用される形
 
 ```json
 {
@@ -12,9 +13,12 @@ A candidate is a directory under `<baseDir>/candidates/<id>/` containing `candid
 }
 ```
 
-Only a candidate with `prompt` and no rows can be applied without a restart, because a running agent's preset cannot be re-bound. The text becomes an agent-scoped prompt section, and disposing that section is the revert. If the watch window says the numbers got worse, the loop reverts it and says so in the journal.
+`prompt` を持ち、行を持たない候補だけが、再起動なしに適用できます。
+走っているエージェントのプリセットは結び直せないからです。
+文面はエージェント単位のプロンプト節になり、その節を外すことが取り消しになります。
+監視期間の数字が悪ければ、ループが自分で外して、そのことをジャーナルに書きます。
 
-## `skill-recipe`: installed, or registered
+## `skill-recipe`：導入するか、登録する形
 
 ```json
 {
@@ -23,19 +27,22 @@ Only a candidate with `prompt` and no rows can be applied without a restart, bec
 }
 ```
 
-A row-shaped candidate cannot be applied to a live agent. It is probed in a child, and adoption produces a bundle that a human installs. The one exception is a skill file with no rows: the runtime registry accepts it, which is what the automatic distiller uses.
+行を持つ候補は、走っているエージェントには適用できません。
+子プロセスで試行し、導入するとバンドルになり、人間が入れます。
+例外は行を持たないスキルだけで、これは実行中の登録に載ります。
+自動の蒸留が使っているのはこの道です。
 
-## Field reference
+## `candidate.json` の項目
 
-| Field | Required | Meaning |
+| 項目 | 必須 | 意味 |
 | --- | --- | --- |
-| `id` | no | Directory name; defaults to the directory it was found in. |
-| `title` | yes | One line for the status view. |
-| `rationale` | yes | Why this helps, tied to the finding. |
-| `finding` | yes | Finding id from `fracture_diagnose`. |
-| `lever` | yes | `prompt`, `skill`, `script`, `tool`, or `hook`. |
-| `rows` | yes | Cordis rows to insert. May be empty for a prompt-only or skill-only candidate. |
-| `verify` | no | Shell command that exits non-zero when the harness fails. |
-| `prompt` | no | Prompt text that may be applied live. Under 4000 characters. |
+| `id` | いいえ | ディレクトリ名です。省略すると見つけたディレクトリ名になります |
+| `title` | はい | 状態表示に出す一行です |
+| `rationale` | はい | なぜ効くのかを、所見に結びつけて書きます |
+| `finding` | はい | `fracture_diagnose` が返した所見の id です |
+| `lever` | はい | `prompt`、`skill`、`script`、`tool`、`hook` のどれかです |
+| `rows` | はい | 差し込む行です。プロンプトだけ、スキルだけの候補では空にします |
+| `verify` | いいえ | ハーネスが失敗したときに 0 以外で終わるコマンドです |
+| `prompt` | いいえ | その場で適用してよいプロンプトの文面です。4000 文字までです |
 
-Rows naming the approval policy, the sandbox policy, the plugin manager, or this plugin are rejected before storage and again before probing.
+承認のポリシー、サンドボックスのポリシー、プラグインマネージャ、このプラグイン自身を指す行を持つ候補は、保存の前と試行の前にはじかれます。

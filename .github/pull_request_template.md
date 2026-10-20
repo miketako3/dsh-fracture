@@ -10,4 +10,4 @@
 
 ## Does this increase what the loop may do on its own?
 
-If yes, say which tier in `docs/AUTONOMY.md` changes and why the boundary moved.
+If yes, say which tier in `docs/仕組み.md` changes and why the boundary moved.

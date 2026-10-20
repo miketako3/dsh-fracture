@@ -12,7 +12,7 @@ import type { PresetRow } from './types.js'
 /** How much the loop may do on its own. */
 export type Autonomy = 'off' | 'memory' | 'skills' | 'full'
 
-/** Risk tier of a change; see docs/AUTONOMY.md. */
+/** Risk tier of a change; see docs/仕組み.md. */
 export type Tier = 0 | 1 | 2 | 3
 
 /** Tuning for the budget and the watch window. */

@@ -1,8 +1,11 @@
-# Contributing
+# コントリビューション
 
-Thanks for looking. This project has an unusual constraint that shapes everything: **it changes the thing it runs in**. Read [docs/AUTONOMY.md](docs/AUTONOMY.md) before proposing a feature that increases what the loop may do on its own.
+見てくれてありがとうございます。
+このプロジェクトには、すべての判断を縛る変わった制約があります。
+**自分が動いている仕組みそのものを変える**という点です。
+ループに許す範囲を広げる提案をする前に、[docs/仕組み.md](docs/仕組み.md) を読んでください。
 
-## Development
+## 開発
 
 ```bash
 git clone https://github.com/miketako3/dsh-fracture
@@ -13,39 +16,49 @@ npm test
 npm run build
 ```
 
-Node 22 or newer. There is no bundler and no test framework dependency: tests run on `node --test` against the compiled output, so a passing `npm test` proves the artifact users get also builds.
+Node 22 以降が必要です。
+バンドラもテストフレームワークも入れていません。
+テストはビルド済みの出力に対して `node --test` で走ります。
+だから `npm test` が通れば、利用者が受け取る成果物もビルドできることの証明になります。
 
-## Where things live
+## ファイルの役割
 
-| Path | Responsibility |
+| パス | 役割 |
 | --- | --- |
-| `src/index.ts` | Plugin entry: config, tool registration |
-| `src/diagnose.ts` | Pure aggregation of session evidence into findings |
-| `src/observe.ts` | Pure extraction of per-turn observations |
-| `src/skills.ts` | Pure skill-candidate detection and rendering |
-| `src/memory.ts` | Observation log, digest, journal, search |
-| `src/guard.ts` | The protected surface |
-| `src/probe.ts` | Two-sided execution and the verdict |
-| `src/propose.ts`, `src/adopt.ts` | Candidate authoring and bundle production |
-| `src/child.ts`, `src/sessions.ts` | Host seams: child agents, session reads |
+| `src/index.ts` | プラグインの入口。設定とツールの登録 |
+| `src/diagnose.ts` | セッションの証拠を所見にまとめる |
+| `src/observe.ts` | ターンごとの観察を取り出す |
+| `src/skills.ts` | スキルになる手順の検出と書き出し |
+| `src/memory.ts` | 観察の記録、ダイジェスト、ジャーナル、検索 |
+| `src/guard.ts` | 触らせない範囲 |
+| `src/probe.ts` | 両側の実行と判定 |
+| `src/propose.ts`、`src/adopt.ts` | 候補の作成とバンドルの生成 |
+| `src/child.ts`、`src/sessions.ts` | ホストとの接点。子エージェントとセッションの読み出し |
 
-Pure modules have no imports from the host and are tested with plain objects. If a change needs a DSH service, it belongs in the orchestration modules, not in `diagnose`, `observe`, or `skills`.
+純粋なモジュールはホストを import せず、素のオブジェクトでテストします。
+DSH のサービスが要る変更は、調整役のモジュールに置いてください。
+`diagnose`、`observe`、`skills` には入れません。
 
-## What a good pull request looks like
+## よいプルリクエストの形
 
-- One behaviour per pull request, with the test that would fail without it.
-- New guard rules come with a test proving the rejected shape, because a guard that silently stops guarding is worse than no guard.
-- Anything that runs a candidate's code must keep it out of the host process.
-- Public API changes to `Config` need a default that preserves current behaviour.
+- 振る舞いの変更は一つずつ。その変更がないと落ちるテストを添えてください。
+- 新しいガードの規則には、はじかれる形を確かめるテストを添えてください。黙って守らなくなるガードは、ガードが無いより悪いからです。
+- 候補のコードを走らせる変更は、そのコードをホストのプロセスに入れないでください。
+- `Config` の公開 API を変えるときは、いまの振る舞いを保つ既定値を用意してください。
 
-## Commit messages
+## コミットメッセージ
 
-Conventional prefixes (`feat:`, `fix:`, `docs:`, `chore:`), imperative mood, and a body that says what was wrong before. The body matters more than the subject.
+`feat:`、`fix:`、`docs:`、`chore:` の接頭辞を使い、命令形で書きます。
+本文には、変更する前の何が問題だったかを書いてください。
+主題より本文のほうが大事です。
 
-## Reporting a bug that involves a probe
+## 試行が絡む不具合の報告
 
-Include the run directory (`runs/<id>/`) with `result.json` and `report.md`, and the candidate's `candidate.json`. Redact anything from the trajectories you would not publish; the reports contain file excerpts and task text.
+`runs/<id>/` の `result.json` と `report.md`、そして候補の `candidate.json` を添えてください。
+軌跡にはファイルの中身や仕事の文面が入ります。
+公開できないものは伏せてから送ってください。
 
-## Security
+## セキュリティ
 
-Do not open a public issue for anything in [SECURITY.md](SECURITY.md). Use a private advisory.
+[SECURITY.md](SECURITY.md) に書いてある種類の話は、公開の issue に書かないでください。
+非公開のアドバイザリを使ってください。
