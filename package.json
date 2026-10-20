@@ -21,8 +21,7 @@
     "README.md",
     "README.ja.md",
     "docs/**/*.md",
-    "demo/**/*.mjs",
-    "examples/**/*"
+    "demo/**/*.mjs"
   ],
   "keywords": [
     "deepseek-harness",

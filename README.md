@@ -31,7 +31,7 @@ Two properties matter before reading the code:
 - A candidate that ships a `plugin/` directory runs in a separate `dsh` process, so unverified code never loads in the process that judges it.
 - Candidates that touch approval, sandbox policy, the plugin manager, or this plugin are rejected before they are stored, and again before they are probed.
 
-Details in [SECURITY.md](SECURITY.md). The reasoning behind the tier boundaries is in [docs/仕組み.md](docs/仕組み.md) (Japanese).
+The reasoning behind the tier boundaries is in [docs/仕組み.md](docs/仕組み.md) (Japanese).
 
 ## What it is
 
@@ -116,10 +116,7 @@ The loop uses these internally, and any of them can be called by hand.
 | --- | --- |
 | [README.ja.md](README.ja.md) | The same introduction in Japanese |
 | [docs/仕組み.md](docs/仕組み.md) | How it works: the four tiers, the triggers, the watch window, the protected surface |
-| [SECURITY.md](SECURITY.md) | The four threats and where the boundaries are |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development rules and what a good pull request looks like |
-| [ROADMAP.md](ROADMAP.md) | What comes next |
-| [examples/](examples/) | One candidate of each shape, and the field reference |
 
 The design and contribution documents are written in Japanese. That is a deliberate choice: they are read by the person who maintains the loop, and a translated design document loses the precision that makes it useful.
 
@@ -147,7 +144,7 @@ Contributions are welcome, but read [CONTRIBUTING.md](CONTRIBUTING.md) first, be
 
 ## Status
 
-0.2 covers observation, memory, skill distillation, the live prompt section, the unattended loop, in-session notices, and automatic apply with auto-revert for prompt-level candidates. Row-shaped candidates still go through a bundle and a human. A UI panel is the next item in [ROADMAP.md](ROADMAP.md).
+0.2 covers observation, memory, skill distillation, the live prompt section, the unattended loop, in-session notices, and automatic apply with auto-revert for prompt-level candidates. Row-shaped candidates still go through a bundle and a human.
 
 ## License
 

@@ -1,6 +1,6 @@
 # dsh-fracture
 
-終わったセッションを読み、エージェントの失敗の原因がハーネスにある箇所を見つけ、直しをデータとして書き、同じ仕事を二度走らせて改善したかを確かめる DSH プラグインです。
+終わったセッションを読み、エージェントの失敗の原因がハーネスにある箇所を見つけ、直しをデータとして書き、同じ仕事を二度実行して改善したかを確かめる DSH プラグインです。
 
 [![CI](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml/badge.svg)](https://github.com/miketako3/dsh-fracture/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -40,8 +40,8 @@ flowchart TB
 20ターンたまると、記録をダイジェストにまとめます。
 同じ手順が失敗も訂正もなく3回続くと、その手順をスキルとして書き出し、走っているセッションに登録します。
 
-記録が十分たまると、診断から適用までを自分で回します。
-きっかけは15分ごとのアイドルか、`fracture_loop` を手で呼んだときです。
+記録が十分たまると、診断から適用までを自動で実行します。
+きっかけは15分ごとのアイドルか、`fracture_loop` を呼んだときです。
 適用した変更は12ターン監視し、数字が悪ければ自動で戻します。
 
 コードを含む変更だけは、人間が入れます。
@@ -63,7 +63,7 @@ flowchart TB
 
 三つの原因は同じです。
 ループが、起きたことを記録しておらず、変更を基準と比べてもいません。
-fracture はこの二つを足して、人間が関与しないまま回します。
+fracture はこの二つを実装し、人間が関与しないまま動かします。
 
 ## どこまで自動で変えるか
 
@@ -112,7 +112,7 @@ dsh plugin --profile web add github:miketako3/dsh-fracture
     baseDir: .dsh/fracture
     digestEvery: 20       # ダイジェストを書き直す間隔（ターン）
     distillMinRepeats: 3  # スキルにするまでの連続成功回数
-    autoLoop: true        # 15分ごとの自走を許す
+    autoLoop: true        # 15分ごとの自動実行を許す
     autoApply: true       # 試行で改善したプロンプト候補を適用する
     watchTurns: 12        # 適用した変更を監視するターン数
 ```
@@ -123,23 +123,23 @@ dsh plugin --profile web add github:miketako3/dsh-fracture
 | `baseDir` | `.dsh/fracture` | 記録と候補の置き場です |
 | `digestEvery` | `20` | ダイジェストを書き直す間隔です |
 | `distillMinRepeats` | `3` | スキルにするまでの連続成功回数です |
-| `autoLoop` | `true` | 15分ごとの自走を許します |
+| `autoLoop` | `true` | 15分ごとの自動実行を許します |
 | `autoApply` | `true` | 試行で改善したプロンプト候補を適用します |
 | `watchTurns` | `12` | 適用した変更を監視するターン数です |
 
 ## ツール
 
 ループはこれらを内部で使います。
-手で呼ぶこともできます。
+ツールとして直接呼ぶこともできます。
 
 | ツール | すること |
 | --- | --- |
-| `fracture_diagnose` | 今のハーネスが下手なところを順位付けします。ツールの失敗率、同じファイルの読み直し、拒否された承認、圧縮の圧力、メッセージの評価を見ます |
+| `fracture_diagnose` | 今のハーネスで問題が起きている順に並べます。ツールの失敗率、同じファイルの読み直し、拒否された承認、圧縮の圧力、メッセージの評価を見ます |
 | `fracture_propose` | 提案役のサブエージェントに、候補を一つ書かせます。`candidate.json` と、必要なら `skills/` か `plugin/` です |
-| `fracture_probe` | 同じ仕事を今のハーネスと候補で走らせ、比べます。`runs/<id>/report.md` を残します |
+| `fracture_probe` | 同じ仕事を今のハーネスと候補で実行し、比べます。`runs/<id>/report.md` を残します |
 | `fracture_adopt` | 試行済みの候補を導入できるバンドルにし、教訓を追記します。導入そのものはしません |
 | `fracture_status` | 何を記録し、何を提案し、各候補がどう評価されたかを返します |
-| `fracture_loop` | 診断から適用までを一度だけ回します。15分ごとの自走と同じ条件を通ります |
+| `fracture_loop` | 診断から適用までを一度だけ実行します。15分ごとの自動実行と同じ条件を通ります |
 | `memory_search` | ダイジェスト、過去のターン、書き出したスキルを検索します |
 
 ## ドキュメント
@@ -147,17 +147,14 @@ dsh plugin --profile web add github:miketako3/dsh-fracture
 | 文書 | 内容 |
 | --- | --- |
 | [docs/仕組み.md](docs/仕組み.md) | 設計、4つの段、いつ動くか、監視の閾値、変更してはいけない範囲 |
-| [SECURITY.md](SECURITY.md) | 何を脅威とみなし、どこに境界を引いているか |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 開発の進め方と、変更が境界を動かすときに求めていること |
-| [ROADMAP.md](ROADMAP.md) | これからやること |
-| [examples/](examples/) | 候補の実例と、`candidate.json` の項目 |
 
 ## 参考にしたもの
 
 [Harness²](https://github.com/google-research/harness2)（Google Research、Apache-2.0）から三つの考えを借りています。
 実装はすべてこのプラグインの中にあり、コードは同梱していません。
 
-- **内省より対比。** 変更の良し悪しは、両方のハーネスで仕事を走らせて決めます。モデルに自分の案を評価させません。
+- **内省より対比。** 変更の良し悪しは、両方のハーネスで仕事を実行して決めます。モデルに自分の案を評価させません。
 - **教訓は証拠とともに積む。** 導入のたびに、きっかけ、変更、判定、理由を `lessons.md` に追記します。
 - **弱いレバーから上げる。** プロンプト、スキル、スクリプト、ツール、フックの順に試します。
 
