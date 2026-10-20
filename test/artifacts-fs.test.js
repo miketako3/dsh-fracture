@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -173,7 +173,6 @@ test('a symlinked dependency directory stays a symlink', async () => {
     assert.equal(existsSync(join(isolated.dir, 'node_modules', 'f.js')), true)
     // The copy must not duplicate the directory contents.
     assert.deepEqual(await readdir(isolated.dir), ['node_modules'])
-    await symlink(join(source, 'extra'), join(isolated.dir, 'linked-extra')).catch(() => undefined)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
