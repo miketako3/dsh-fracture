@@ -95,8 +95,12 @@ prompt index (what the model sees)
 ## 導入
 
 ```bash
-dsh plugin --profile web add dsh-self-harness
+dsh plugin --profile web add dsh-self-harness          # 公開版
+dsh plugin --profile web add github:miketako3/dsh-self-harness   # main の最新
 ```
+
+npm のレジストリにあるのはまだ 0.1.0 で、以下の自走ループ、記憶、自動適用は `main` に入っている。
+git 形式で入れるとインストール時にビルドされる。
 
 一度だけ再起動する。
 設定は不要で、観察と記憶はそのまま始まる。

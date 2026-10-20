@@ -99,8 +99,11 @@ That line is deliberate. An agent that can install its own code without a human 
 ## Install
 
 ```bash
-dsh plugin --profile web add dsh-self-harness
+dsh plugin --profile web add dsh-self-harness          # published release
+dsh plugin --profile web add github:miketako3/dsh-self-harness   # current main
 ```
+
+The npm registry still carries 0.1.0; the unattended loop, memory, and automatic apply below are on `main` and install with the git form (the package builds itself on install).
 
 Restart once. No configuration is required: observation and memory start immediately.
 
