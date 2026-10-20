@@ -112,6 +112,14 @@ export type Verdict = 'improved' | 'regressed' | 'no-change' | 'needs-review'
 export interface ProbeSide {
   readonly passed: boolean | null
   readonly trajectory: Trajectory
+  /**
+   * Input tokens of the first step, when the run reported usage.
+   *
+   * This is the number the loop spends before doing any work: the instruction
+   * set and the first user turn. Absent when the provider gave no sample, which
+   * is not the same as zero.
+   */
+  readonly promptTokens?: number
   readonly error?: string
 }
 

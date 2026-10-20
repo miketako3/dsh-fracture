@@ -224,7 +224,7 @@ export function apply(ctx: Context, config: Config): void {
    * @param candidate - a candidate that passed its probe.
    * @returns a line describing what happened, for the tool result.
    */
-  const autoApplyCandidate = async (agent: unknown, candidate: Candidate): Promise<string> => {
+  const autoApplyCandidate = async (agent: unknown, candidate: Candidate, probeTokens?: number): Promise<string> => {
     if (!config.autoApply) return 'auto-apply is off; the candidate stays a bundle.'
     if (!tierAllowed(config.autonomy, 2)) return `autonomy \`${config.autonomy}\` does not reach composition changes.`
     const allowed = applyability(candidate)
@@ -236,7 +236,10 @@ export function apply(ctx: Context, config: Config): void {
     try {
       overrides.set(candidate.id, applyOverride(agent as LiveAgent, override))
       const recent = await readObservations(store, config.watchTurns)
-      await pilot.openWatch(candidate.id, metricsFrom(recent), config.watchTurns)
+      // The probe's first-turn count is the only real sample of what this change
+      // costs before any work happens, so it backs the watch when live turns
+      // carry no usage of their own.
+      await pilot.openWatch(candidate.id, metricsFrom(recent, probeTokens ?? 0), config.watchTurns)
       await journal(store, `applied ${candidate.id} to a live agent; watching ${String(config.watchTurns)} turns`)
       notify(
         agent as Agent,
@@ -327,7 +330,7 @@ export function apply(ctx: Context, config: Config): void {
         await journal(store, `auto loop: ${candidate.id} probed ${result.verdict}, not applied`)
         return `probed ${candidate.id}: ${result.verdict}, not applied`
       }
-      const applied = await autoApplyCandidate(agent, candidate)
+      const applied = await autoApplyCandidate(agent, candidate, result.changed.promptTokens)
       return `probed ${candidate.id}: improved. ${applied}`
     } catch (error) {
       await pilot.noteFailure()
@@ -535,7 +538,7 @@ export function apply(ctx: Context, config: Config): void {
         signal: exec.signal,
       })
       const applied = result.verdict === 'improved'
-        ? await autoApplyCandidate(analyzedAgent(exec), candidate)
+        ? await autoApplyCandidate(analyzedAgent(exec), candidate, result.changed.promptTokens)
         : 'not applied: the probe did not come back improved.'
       return `${renderProbe(result, store)}\n\n## Live apply\n\n${applied}`
     },

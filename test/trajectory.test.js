@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { renderTrajectory, trajectoryFromHeadless, trajectoryFromSession } from '../lib/trajectory.js'
+import {
+  firstPromptTokens,
+  firstPromptTokensFromHeadless,
+  renderTrajectory,
+  trajectoryFromHeadless,
+  trajectoryFromSession,
+} from '../lib/trajectory.js'
 
 test('a session call and result pair into one action and observation', () => {
   const trajectory = trajectoryFromSession([
@@ -71,4 +77,28 @@ test('the shared grammar starts each step with an action', () => {
   const rendered = renderTrajectory({ steps: [{ action: 'read x', observation: 'y' }], finalText: '', toolErrors: 0 })
   assert.equal(rendered, '[ACTION] read x\n[OBSERVATION]\ny')
   assert.equal(renderTrajectory({ steps: [], finalText: '', toolErrors: 0 }), '_(no tool activity)_')
+})
+
+test('the first step input tokens are read from the session log', () => {
+  const events = [
+    { type: 'turn/start', data: {} },
+    { type: 'assistant/message', data: { usage: { inputTokens: 4120, outputTokens: 90 } } },
+    { type: 'assistant/message', data: { usage: { inputTokens: 5000, outputTokens: 10 } } },
+  ]
+  assert.equal(firstPromptTokens(events), 4120)
+})
+
+test('a first step without usage stays undefined rather than zero', () => {
+  assert.equal(firstPromptTokens([{ type: 'assistant/message', data: {} }]), undefined)
+  assert.equal(firstPromptTokens([]), undefined)
+})
+
+test('the headless stream reports the first step usage', () => {
+  const events = [
+    { type: 'status', phase: 'turn_start', turn: 1 },
+    { type: 'status', phase: 'step_end', step: 1, usage: { inputTokens: 2300, outputTokens: 40 } },
+    { type: 'status', phase: 'step_end', step: 2, usage: { inputTokens: 3100, outputTokens: 20 } },
+  ]
+  assert.equal(firstPromptTokensFromHeadless(events), 2300)
+  assert.equal(firstPromptTokensFromHeadless([{ type: 'status', phase: 'step_end' }]), undefined)
 })

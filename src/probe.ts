@@ -17,7 +17,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { PresetDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import type { Candidate, ProbeMode, ProbeResult, ProbeSide, Verdict } from './types.js'
 import { EMPTY_TRAJECTORY, messageOf, runChild } from './child.js'
-import { renderTrajectory, trajectoryFromHeadless } from './trajectory.js'
+import { firstPromptTokensFromHeadless, renderTrajectory, trajectoryFromHeadless } from './trajectory.js'
 import { isolateWorkspace } from './workspace.js'
 import { timestamp, writeJson, type Store } from './store.js'
 
@@ -111,9 +111,11 @@ async function runOutOfProcess(
         }
       }
       const stderr = err.join('').trim()
+      const tokens = firstPromptTokensFromHeadless(events)
       finish({
         passed: null,
         trajectory: trajectoryFromHeadless(events),
+        ...(tokens === undefined ? {} : { promptTokens: tokens }),
         ...(code === 0 ? {} : { error: `exited with code ${String(code)}${stderr === '' ? '' : `: ${stderr.slice(-400)}`}` }),
       })
     })
@@ -259,6 +261,21 @@ export async function runProbe(request: ProbeRequest): Promise<ProbeResult> {
   return result
 }
 
+/** Rows for the first-turn token table, or a note when neither side reported usage. */
+function tokenRows(result: ProbeResult): string[] {
+  const { baseline, changed } = result
+  if (baseline.promptTokens === undefined && changed.promptTokens === undefined) {
+    return ['_Neither side reported usage; the provider gave no sample._']
+  }
+  const cell = (value: number | undefined): string => value === undefined ? 'not reported' : String(value)
+  return [
+    '| side | input tokens |',
+    '| --- | --- |',
+    `| baseline | ${cell(baseline.promptTokens)} |`,
+    `| changed | ${cell(changed.promptTokens)} |`,
+  ]
+}
+
 function renderReport(result: ProbeResult, candidate: Candidate, verifyDetail: string): string {
   return [
     `# Probe ${result.runId}`,
@@ -275,6 +292,10 @@ function renderReport(result: ProbeResult, candidate: Candidate, verifyDetail: s
     '```text',
     result.task,
     '```',
+    '',
+    '## First turn',
+    '',
+    ...tokenRows(result),
     '',
     '## Deterministic check',
     '',

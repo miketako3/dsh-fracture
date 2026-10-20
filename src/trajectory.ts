@@ -115,6 +115,37 @@ export function trajectoryFromHeadless(events: readonly unknown[]): Trajectory {
   return { steps, finalText, toolErrors }
 }
 
+/**
+ * Input tokens of the first assistant step in a stored session.
+ * @param events - the session log, in order.
+ * @returns the count, or undefined when the first step reported no usage.
+ */
+export function firstPromptTokens(events: readonly RawEvent[]): number | undefined {
+  for (const event of events) {
+    if (event.type !== 'assistant/message') continue
+    const usage = event.data?.['usage']
+    const input = atPath(usage, 'inputTokens')
+    return typeof input === 'number' ? input : undefined
+  }
+  return undefined
+}
+
+/**
+ * Input tokens of the first completed step in a `dsh --json` stream.
+ * @param events - parsed stdout lines.
+ * @returns the count, or undefined when the stream carried no usage.
+ */
+export function firstPromptTokensFromHeadless(events: readonly unknown[]): number | undefined {
+  for (const event of events) {
+    if (typeof event !== 'object' || event === null) continue
+    const record = event as Record<string, unknown>
+    if (record['type'] !== 'status' || record['phase'] !== 'step_end') continue
+    const input = atPath(record['usage'], 'inputTokens')
+    return typeof input === 'number' ? input : undefined
+  }
+  return undefined
+}
+
 /** Render a trajectory as the shared text grammar. */
 export function renderTrajectory(trajectory: Trajectory): string {
   if (trajectory.steps.length === 0) return '_(no tool activity)_'

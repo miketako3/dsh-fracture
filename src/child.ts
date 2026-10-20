@@ -14,7 +14,7 @@ import type { SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type { ProbeSide, Trajectory } from './types.js'
 import { readSessionEvents } from './sessions.js'
-import { trajectoryFromSession } from './trajectory.js'
+import { firstPromptTokens, trajectoryFromSession } from './trajectory.js'
 
 /** A trajectory with nothing in it, used whenever startup fails. */
 export const EMPTY_TRAJECTORY: Trajectory = { steps: [], finalText: '', toolErrors: 0 }
@@ -35,10 +35,18 @@ export function blockText(blocks: readonly unknown[]): string {
   return parts.join('\n')
 }
 
-/** Read a persisted child session into a trajectory, tolerating absent persistence. */
-export async function sessionTrajectory(ctx: Context, sessionId: SessionId, signal: AbortSignal): Promise<Trajectory | undefined> {
+/** A persisted child session, folded for comparison. */
+export interface SessionFacts {
+  readonly trajectory: Trajectory
+  readonly promptTokens?: number
+}
+
+/** Read a persisted child session, tolerating absent persistence. */
+export async function sessionFacts(ctx: Context, sessionId: SessionId, signal: AbortSignal): Promise<SessionFacts | undefined> {
   const events = await readSessionEvents(ctx, sessionId, signal)
-  return events === undefined ? undefined : trajectoryFromSession(events)
+  if (events === undefined) return undefined
+  const tokens = firstPromptTokens(events)
+  return { trajectory: trajectoryFromSession(events), ...(tokens === undefined ? {} : { promptTokens: tokens }) }
 }
 
 /** One child run's outcome. */
@@ -104,12 +112,13 @@ export async function runChild(
   try {
     const result = await activation.result
     const finalText = blockText(result.output)
-    const fromLog = await sessionTrajectory(ctx, activation.childId, signal)
-    const trajectory = fromLog ?? { steps: [], finalText, toolErrors: 0 }
+    const fromLog = await sessionFacts(ctx, activation.childId, signal)
+    const trajectory: Trajectory = fromLog?.trajectory ?? { steps: [], finalText, toolErrors: 0 }
     return {
       side: {
         passed: null,
         trajectory: trajectory.finalText === '' && finalText !== '' ? { ...trajectory, finalText } : trajectory,
+        ...(fromLog?.promptTokens === undefined ? {} : { promptTokens: fromLog.promptTokens }),
         ...(result.stopReason === 'completed' ? {} : { error: `child stopped: ${result.stopReason}` }),
       },
       childId: activation.childId,
